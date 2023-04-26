@@ -1,3 +1,4 @@
+// -*- mode: Bluespec; -*-
 /* ****************************************************************************
   This encodes the execution flows of the p2p system of CometBFT for 
   maintaining connections to other
