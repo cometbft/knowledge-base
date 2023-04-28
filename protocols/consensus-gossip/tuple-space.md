@@ -8,7 +8,7 @@ Three kinds of messages are exchanged in the Tendermint algorithm: `PROPOSAL`, `
 The algorithm progresses when certain conditions are satisfied over the set of messages received.
 For example, in order do decide on a value `v`, the set must include a `PROPOSAL` for `v` and `PRE-COMMIT` for the same `v` from more than two thirds of the validators for the same round.
 Since processes are subject to failures, correct processes cannot wait indefinitely for messages since the sender may be faulty.
-Hence, processes execute in rounds in which they wait for conditions to be met for sometime but, if they timeout, send negative messages that will lead to new rounds.
+Hence, processes execute in rounds in which they wait for conditions to be met for some time but, if they timeout, send negative messages that will lead to new rounds.
 
 
 ## The need for Gossip Communication
@@ -45,7 +45,7 @@ To propose a value, the proposer adds it to the tuple space, and to vote for a p
 Each tuple is signed by the validator adding it to the tuple space.
 Since each tuple includes the height, round, there is no room for forgery (and any attempt to add differing entries for the same heigh and round by the same validator will be seen as evidence of misbehavior).[^todo1]
 
-Because nodes are are part of an asynchronous distributed system, individual nodes can only maintain approximations of the tuple space, which they try to converge.
+Because nodes are are part of an asynchronous distributed system, individual nodes can only maintain approximations of the tuple space, to which they try to converge.
 There are essentially two ways of making the tuple space converge.
 
 - **Approach One**: nodes broadcast all the updates they want to perform to all nodes, including themselves.
@@ -65,7 +65,7 @@ In other words, nodes observing different approximations of the tuple space may 
 
 In both approaches for synchronization, the tuple space could grow indefinitely, given that the number of heights and rounds is infinite.
 To save memory, entries should be removed from the tuple space as soon as they become stale, that is, they are no longer useful.
-For example, if a new height is started, all entries corresponding toe previous heights become stale.
+For example, if a new height is started, all entries corresponding to previous heights become stale.
 
 In general, simply forgetting stale entries in the local view would save the most space.
 However, it could lead to entries being added back or circulating on the network.
@@ -173,7 +173,7 @@ Removing tuple is exactly how stale messages get removed.
 
 ## The tuple space as a CRDT
 
-The two approaches described in [earlier](#nodes-state-as-a-tuple-space), without the deletion of entries, correspond to operation-based and state-based [Grow-only SET](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#G-Set_(Grow-only_Set)) CRDT (G-Set).
+The two approaches described [earlier](#nodes-state-as-a-tuple-space), without the deletion of entries, correspond to operation-based and state-based [Grow-only SET](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#G-Set_(Grow-only_Set)) CRDT (G-Set).
 This distributed data-structure is easily described as a set per process in which elements are added to include them G-Set; the sets kept by processes are approximations of the G-Set.
 
 The [2 Phase-Set](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#2P-Set_(Two-Phase_Set)) (2P-Set) is a variation that allows removals.
