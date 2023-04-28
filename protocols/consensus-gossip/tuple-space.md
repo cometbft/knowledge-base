@@ -1,4 +1,6 @@
-# Part 1: Tuple Space
+# Tendermint Message sets as a Tuple Space CRDT
+
+Here argue that the exchange of messages of the Tendermint algorithm can and should be seen as an eventually convergent Tuple implemented as a tuple space.
 
 > :warning:
 > We assume that you understand the Tendermint algorithm and therefore we will not review it here.
@@ -10,7 +12,7 @@ For example, in order do decide on a value `v`, the set must include a `PROPOSAL
 Since processes are subject to failures, correct processes cannot wait indefinitely for messages since the sender may be faulty.
 Hence, processes execute in rounds in which they wait for conditions to be met for some time but, if they timeout, send negative messages that will lead to new rounds.
 
-## The need for Gossip Communication
+## On the need for Gossip Communication
 
 Progress and termination are only guaranteed in if there exists a **Global Stabilization Time (GST)** after which communication is reliable and timely (Eventual $\Delta$-Timely Communication).
 
@@ -59,7 +61,6 @@ In other words, nodes observing different approximations of the tuple space may 
 
 [^todo2]: This should be trivial from the fact that the first approach is essentially Tendermint using Gossip Communication.
 
-
 ### Tuple Removal and Garbage Collection
 
 In both approaches for synchronization, the tuple space could grow indefinitely, given that the number of heights and rounds is infinite.
@@ -67,21 +68,30 @@ To save memory, entries should be removed from the tuple space as soon as they b
 For example, if a new height is started, all entries corresponding to previous heights become stale.
 
 In general, simply forgetting stale entries in the local view would save the most space.
-However, it could lead to entries being added back or circulating on the network.
-Even if re-adding tuples does not compromise CometBFT's correctness, removed entries should not be added again, for performance and resource utilization sake.
+However, it could lead to entries being added back and never being completely purged from the system.
+Although stale entries do not affect the algorithm, or they would not be considered stale, not adding the entries back for performance and resource utilization sake.
 
-Re-adding entries may be prevented by keeping _tombstones_ for the removed entries.
-We note the tombstone for an entry $e$ as $\bar{e}$.
-
-With time, even small tombstones may accrue and need to be garbage collected, in which cause the corresponding entry may be added again; again, this will not break correctness and as long as tombstones are kept for long enough, the risk of re-adding is minimal.
+One approach to prevent re-adding entries may be prevented by keeping _tombstones_ for the removed entries.
+With time, however, even small tombstones may accrue and need to be garbage collected, in which cause the corresponding entry may be added again; again, this will not break correctness and as long as tombstones are kept for long enough, the risk of re-adding is minimal.
 
 In the case of the Tendermint algorithm we note that staleness comes from adding newer messages (belonging to higher rounds and heights) to the tuple space.
 Hence, in Approach Two, if as an optimization these newer messages are exchanged first, then the stale messages can be excluded before being shared to other nodes that might have forgotten them and tombstones may not be needed at all.
+
+#### Local and Global views
+
+Let $T$ be the tuple space as seen by an external observer, also referred here as the **global view**, and $t_p$ be node $p$'s approximation of $T$, also referred as $p$'s **local view**.
+Because of the asynchronous nature of distributed systems, local views may not include all entries in the global view or may still include entries no longer in the global view.
+Formally, let $P$ be the set of validators and $\bar{e}$ be the tombstone for an entry $e$, if tombstones are used.
+
+- $T = \cup_P t_p$
+- $e \in T \Leftrightarrow \exists p \in P, e \in t_p \land \not\exists q \in Q, \bar{e}\in t_q$
+
 
 ### Querying the Tuple Space
 
 The tuple space is consulted through queries, which have the same form as the entries.
 Queries return all entries whose values match those in the query, where a `*` matches all values.
+Nodes can only query their own local views, not the global view $T$.
 For example, suppose a node's local view of the tuple space has the following entries, here organized as rows of a table for easier visualization:
 
 | Height | Round | Step     | Validator | Value |
@@ -96,29 +106,21 @@ For example, suppose a node's local view of the tuple space has the following en
 - Query $\lang 0, 0, Proposal, p, * \rang$ returns $\{ \lang 0, 0, Proposal, p, pval \rang \}$
 - Query $\lang 0, 0, *, p, * \rang$ returns $\{ \lang 0, 0, Proposal, p, pval \rang,  \lang 0, 0, PreVote, p, vval \rang \}$.
 
-#### Local views
-
-Let $T$ be the tuple space and $t_p$ be node $p$'s approximation of $T$, also denominated $p$'s **local views**.
-Because of the asynchronous nature of distributed systems, local views may not include entries in the space or may still include entries no longer in the space.
-
-Formally, let $P$ be the set of validators; $T = \cup_P t_p$ and $e \in T \Leftrightarrow \exists p \in P, e \in t_p \land \not\exists q \in Q, \bar{e}\in t_q$
-
-Nodes can only query their own local views, not $T$.
 If needed for disambiguation, queries are subscripted with the node being queried.
 
 #### State Validity
 
-Let $\text{ValSet}_h$ be the set of validators of height $h$ and $\text{Prop}_{h,r}$ be the proposal of round $r$ of height $h$.
+Let $P$ be the set of all processes in the system, $\text{ValSet}_h \subseteq P$ be the set of validators of height $h$ and $\text{Prop}_{h,r}$ be the proposer of round $r$ of height $h$.
 
 Given that each validator can execute each step only once per round, a query that specifies height, round, step and validator must either return empty or a single tuple.
 
-- $\forall h \in \N, r \in \N, s \in \{\text{Proposal, PreVote, PreCommit}\}, v \in \text{ValSet}_h$,  $\lang h, r, s, v, * \rang$ returns at most one value.
+- $\forall h \in \N, r \in \N, s \in \{\text{Proposal, PreVote, PreCommit}\}, v \in \text{ValSet}_h$,  $\cup_{p \in P} \lang h, r, s, v, * \rang_p$ contains at most one element.
 
 In the specific case of the Proposal step, only the proposer of the round can have a matching entry.
 
-- $\forall h \in \N, r \in \N, \lang h, r, \text{Proposal}, *, * \rang$ returns at most one value and it also matches $\lang h, r, \text{Proposal}, \text{Prop}_{h,r}, * \rang$.
+- $\forall h \in \N, r \in \N, \lang h, r, \cup_{p \in P} \text{Proposal}, *, * \rang_p$ contains at most one element and it also matches $\cup_{p\in P} \lang h, r, \text{Proposal}, \text{Prop}_{h,r}, * \rang_p$.
 
-A violation of these rules is a proof of misbehavior.
+A violation of these rules is a misbehavior by the validator signing the offending entries.
 
 ### Eventual Convergence
 
@@ -177,37 +179,71 @@ If the reliable communication primitive precludes duplication, then applying all
 If duplications are allowed, then the operations must be made idempotent somehow.
 
 State-based CRDT do not rely on reliable communication.
-Instead it assumes that replicas will compare their states converge two-by-two using a merge function; as long as the function is commutative, associative and idempotent, the states will converge.
+Instead it assumes that replicas will compare their states and converge two-by-two using a merge function; as long as the function is commutative, associative and idempotent, the states will converge.
 For example, in the G-Set case, the merge operator is simply the union of the sets.
 
-The two approaches for converging the message sets in the Tendermint algorithm described [earlier](#nodes-state-as-a-tuple-space), without the deletion of entries, correspond to the operation-based and state-based [Grow-only Set](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#G-Set_(Grow-only_Set)) CRDT.
+The two approaches for converging the message sets in the Tendermint algorithm described [earlier](#nodes-state-as-a-tuple-space), without the deletion of entries, correspond to the operation-based and state-based [Grow-only Set](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#G-Set_(Grow-only_Set)) CRDT and removals may be handled using a 2P-Set, explained next.
+
+### Stale-entry Sets CRDT
+
+- An entry is stale if it no does not affect the output of the merge Operator
+  - it being present or not does not change the result
+  - does not affect the application using it
+  - may not be perceived locally
+  - Staleness is encapsulated by the merge operator.
+  - Stale entries may be forgotten.
+- Staleness is determined based on other entries.
+- Staleness is transitive.
+- Tombstones
+  - implicit staleness - regular entries
+  - explicit staleness - special tombstone entry
+    - Gossiping
+      - If tombstones are not to be gossiped, they do not need to be signed
+      - If they are to be gossiped
+        - either they need to carry proof for the reason they were created in the form of other entries, defeating the purpose of gossiping the tombstone
+        - they need to be signed to allow detection of misbehavior
+    - Tombstones removal may lead to entry revival in the local views
+      - breaks the CRDT properties
+        - still useful, for example as a mempool
+        - Although the Tendermint algorithm shouldn't require tombstones at all, there may be cases in which their addition for messages already staled by others helps clean up the tuple space quickly, but their removal will not break correctness.
+
+```bash
+type Value:...
+
+type Entry = {height: Nat, round: Nat, type:{Proposal, PreVote, PreCommit}, validator: ProcId, value: Value}
+
+type View: {addSet: Set[Entry], delSet: Set[Entry]}
+
+pure val bot:View = {addSet:Set(), delSet:Set()}
+
+//Drops deprecated entries.
+clean(v: View): View = ...
+
+def globalView(lVs: ProcId -> View): View =
+    let viewUnion = lVs.keys().fold(bot,
+                                    (acc, view) => {addSet:acc.addSet.union(view.addSet),
+                                                    delSet:acc.delSet.union(view.delSet)})
+
+    deprecate({addSet:viewUnion.addSet.exclude(viewUnion.delSet, delSet:viewUnion.delSet)})
+
+add(p: ProcId, e: Entry, lVs: ProcId -> View) =
+    val lVp = lVs.getOrDefault(p, bot)
+    val lVpN = lVp.with("addSet", lVp.addSet.union(Set(e).exclude(lvp.delSet))
+    lVs.set(p, lVpN)
 
 
-
-Using the 2P-Set It would seem that
-The  (2P-Set) is a variation that allows removals.
-It combines two sets, one in which elements are added to include them in the 2P-Set, $A$, and one in which elements are added to remove them from the 2P-Set, $D$; the actual membership of the 2P-Set is given by $A \setminus D$.
-
-
-
-
-
-
-
-> Warning/TODO: A word about tombstones, that is $D$
->
-> - Only state that is not required should be deleted/tombstone'd.
-> - Instead of tombstones, add new entries that trigger removal of other entries (for example, state about a new height); each node must be given information to realize by itself that an entry is no longer needed.
-> - Tombstones are an optimization, kept to prevent data recreation and redeletion.
-> - Tombstones should be garbage collected at some point; imprecision shouldn't affect correctness/termination, since this is an optimization (as long as deleted state is never required again).
-> - Tombstones are not to be gossiped; if they were, they would need to carry proof for the reason they were created, defeating their point.
-
-
-### Vote CRDT
-
+merge(lhs: View, rhs: View) = {
+    val dels = lhs.delSet.union(rhs.delSet)
+    val adds = lhs.addSet.union(rhs.addSet).exclude(dels)
+    deprecate({addSet:adds, delSet:dels})
+}
 ```
-val bot = Set()
 
-var V: ProcId -> Set[(h,r,t,w,v)] //height, round, type, validator, value
 
-```
+
+## TODO
+
+- @josef-widder We should try to understand what we need to do about Byzantine validators. In principle, we could say that the tuple space only contains entries for correct validators, and factor in Byzantine behavior by adapting semantics of the query belows.
+- @josef-widder Here (when querying) we could say if p is faulty, query can give any result (allowing for two-faces perceptions of Byzantine faults).
+- @lasarojc $T$ is the actual tuple space, the global view if you will, and combines the values of all local views.
+No node can see it and I've defined it here expecting to be useful from a formalization point of view. I may be exactly the case for dealing with byzantine validators. That is, byzantine nodes can poison local views with tuples not with the global view (because the collide). But I will need to think more about it before committing to a solution.
