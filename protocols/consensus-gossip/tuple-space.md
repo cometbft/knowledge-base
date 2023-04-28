@@ -10,7 +10,6 @@ For example, in order do decide on a value `v`, the set must include a `PROPOSAL
 Since processes are subject to failures, correct processes cannot wait indefinitely for messages since the sender may be faulty.
 Hence, processes execute in rounds in which they wait for conditions to be met for some time but, if they timeout, send negative messages that will lead to new rounds.
 
-
 ## The need for Gossip Communication
 
 Progress and termination are only guaranteed in if there exists a **Global Stabilization Time (GST)** after which communication is reliable and timely (Eventual $\Delta$-Timely Communication).
@@ -79,7 +78,6 @@ With time, even small tombstones may accrue and need to be garbage collected, in
 In the case of the Tendermint algorithm we note that staleness comes from adding newer messages (belonging to higher rounds and heights) to the tuple space.
 Hence, in Approach Two, if as an optimization these newer messages are exchanged first, then the stale messages can be excluded before being shared to other nodes that might have forgotten them and tombstones may not be needed at all.
 
-
 ### Querying the Tuple Space
 
 The tuple space is consulted through queries, which have the same form as the entries.
@@ -97,7 +95,6 @@ For example, suppose a node's local view of the tuple space has the following en
 
 - Query $\lang 0, 0, Proposal, p, * \rang$ returns $\{ \lang 0, 0, Proposal, p, pval \rang \}$
 - Query $\lang 0, 0, *, p, * \rang$ returns $\{ \lang 0, 0, Proposal, p, pval \rang,  \lang 0, 0, PreVote, p, vval \rang \}$.
-
 
 #### Local views
 
@@ -123,7 +120,6 @@ In the specific case of the Proposal step, only the proposer of the round can ha
 
 A violation of these rules is a proof of misbehavior.
 
-
 ### Eventual Convergence
 
 Consider the following definition for **Eventual Convergence**.
@@ -145,7 +141,6 @@ Formally, if there is a GST then following holds true:
 
 Although GST may be too strong an expectation, in practice timely communication frequently happens within small stable periods, also leading to convergence.
 
-
 ### Why use a Tuple Space
 
 Let's recall why we are considering using a tuple space to propagate Tendermint's messages.
@@ -163,21 +158,38 @@ We argue later that it can be implemented using Anti-Entropy or Epidemic protoco
 We pointed out [previously](#the-need-for-gossip-communication) that Gossip Communication is overkill for Tendermint because it requires even stale messages to be delivered.
 Removing tuple is exactly how stale messages get removed.
 
-
 [^proof]:  TODO: do we need to extend here?
-
 
 ### When to remove
 
-> **TODO** Define conditions for tuple removal.
+> **TODO** Define conditions for tuple removal. Reference
 
 ## The tuple space as a CRDT
 
-The two approaches described [earlier](#nodes-state-as-a-tuple-space), without the deletion of entries, correspond to operation-based and state-based [Grow-only SET](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#G-Set_(Grow-only_Set)) CRDT (G-Set).
-This distributed data-structure is easily described as a set per process in which elements are added to include them G-Set; the sets kept by processes are approximations of the G-Set.
+Conflict-free Replicated Data Types (CRDT) are distributed data structures that explore commutativity in update operations to achieve [Strong Eventual Consistency](https://en.wikipedia.org/wiki/Eventual_consistency#Strong_eventual_consistency).
+As an example of CRDT, consider a counter which updated by increment operations, known as Grown only counter (G-Counter): as long as the same set of operations are executed by two replicas, their views of the counter will be the same, irrespective of the execution order.
 
-The [2 Phase-Set](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#2P-Set_(Two-Phase_Set)) (2P-Set) is a variation that allows removals.
+More relevant CRDT are the Grown only Set (G-Set), in which operations add elements to a set, and the [2-Phase Set](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#2P-Set_(Two-Phase_Set)) (2P-Set), which combines two G-Set to collect inclusions and exclusions to a set.
+
+CRDT may be defined in two ways, operation- and state-based.
+Operation-based CRDT use reliable communication to ensure that all updates (operations) are delivered to all replicas.
+If the reliable communication primitive precludes duplication, then applying all operations will lead to the same state, irrespective of the delivery order since operations are commutative.
+If duplications are allowed, then the operations must be made idempotent somehow.
+
+State-based CRDT do not rely on reliable communication.
+Instead it assumes that replicas will compare their states converge two-by-two using a merge function; as long as the function is commutative, associative and idempotent, the states will converge.
+For example, in the G-Set case, the merge operator is simply the union of the sets.
+
+The two approaches for converging the message sets in the Tendermint algorithm described [earlier](#nodes-state-as-a-tuple-space), without the deletion of entries, correspond to the operation-based and state-based [Grow-only Set](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#G-Set_(Grow-only_Set)) CRDT.
+
+
+
+Using the 2P-Set It would seem that
+The  (2P-Set) is a variation that allows removals.
 It combines two sets, one in which elements are added to include them in the 2P-Set, $A$, and one in which elements are added to remove them from the 2P-Set, $D$; the actual membership of the 2P-Set is given by $A \setminus D$.
+
+
+
 
 
 
@@ -190,3 +202,12 @@ It combines two sets, one in which elements are added to include them in the 2P-
 > - Tombstones should be garbage collected at some point; imprecision shouldn't affect correctness/termination, since this is an optimization (as long as deleted state is never required again).
 > - Tombstones are not to be gossiped; if they were, they would need to carry proof for the reason they were created, defeating their point.
 
+
+### Vote CRDT
+
+```
+val bot = Set()
+
+var V: ProcId -> Set[(h,r,t,w,v)] //height, round, type, validator, value
+
+```
