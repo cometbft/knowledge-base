@@ -32,6 +32,21 @@ graph of interrelated notes/ideas/concepts.
   graph.
 - Use standard Markdown links to reference source material.
 
+## Contributing
+
+Core team members can make updates directly to the `main` branch without
+submitting pull requests. Only if you feel you need content to be reviewed
+should you submit a pull request.
+
+For non-core team contributors:
+- If you find a mistake in any of the concepts you encounter in this repository,
+  please submit an issue.
+- If you would like to add concepts, or expand on them in some way, please
+  submit a pull request. Please limit the addition of new concepts to **one
+  concept per pull request**. In general, the smaller and more concise a pull
+  request (< 300-500 lines), the quicker it will be for the core team to review
+  and the more likely it is to be accepted.
+
 ## License
 
 This work is licensed under a [Creative Commons Attribution 4.0 International
