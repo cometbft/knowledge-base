@@ -4,8 +4,12 @@
 License][license-img]][license]
 
 This repository is intended to act as a team [Zettelkasten][zk] for the CometBFT
-core team. It is _always_ a work-in-progress. It is made public in case other
-people or users may find it to be of use/interest.
+core team as an attempt to preserve both knowledge gained and insights gleaned
+by the team - both for the current team, and future people working on the
+project.
+
+It is _always_ a work-in-progress. It is made public in case other people or
+users may find it to be of use/interest.
 
 ## Requirements
 
