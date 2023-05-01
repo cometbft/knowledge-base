@@ -40,7 +40,7 @@ should you submit a pull request.
 
 For non-core team contributors:
 - If you find a mistake in any of the concepts you encounter in this repository,
-  please submit an issue.
+  please submit an issue, or a pull request that addresses the mistake.
 - If you would like to add concepts, or expand on them in some way, please
   submit a pull request. Please limit the addition of new concepts to **one
   concept per pull request**. In general, the smaller and more concise a pull
