@@ -82,8 +82,8 @@ only validator nodes interact with the mempool in this way.
 
 The consensus protocol is responsible for committing blocks of transactions to
 the blockchain.
-Once a block is committed to the blockchain, all transactions included in the
 block should be removed from the mempool, as they are no any longer pending.
+Once a block is committed to the blockchain, all transactions included in the
 The consensus protocol thus, as part of the procedure to commit a block,
 informs the mempool the list of transactions included in the committed block.
 The mempool then removes from its local list of pending transactions the
@@ -100,43 +100,45 @@ of the application, which is part of this same procedure to commit a block.
 
 ## Formalization Attempt
 
-Let `committed(tx, h)` return true iff the transaction `tx` is committed by
-height `h` of the blockchain.
-This means that `tx` was included in a block `B_k` of transactions with height `k <= h`.
+In what follows, we try to formalize the notion of mempool.
+To this end, we first provide a (brief) definition of what is a ledger, that is a replicated log of transactions.
+At some process $p$, we shall write $p.var$ the local variable $var$ at $p$.
 
-> Notice that `committed(tx, h) => committed(tx, h')` for all `h' > h`.
+**Ledger.**
+We use the standard defintion of (BFT) SMR, where each process $p$ has a ledger, written $p.ledger$.
+At process $p$, the $i$-th entry of the ledger is denoted $p.ledger[i]$.
+This entry contains either a null value ($\bot$), or a set of transactions, aka., a block.
+The height of the ledger at $p$ is the index of the first null entry.
+Operation $submit(txs, i)$ attempts to write the set of transactions $txs$ to the $i$-th entry of the ledger.
+As standard, the ledger ensures that there is no hole at each process,
+that is  $\forall i. \forall p. p.ledger[i] \neq \bot \implies (i=0 \vee p.ledger[i-1] \neq \bot)$.
+It also makes sure that no two correct process have different entries;
+formally: $\forall i. \forall p,q \in Correct. (p.ledger[i] = \bot) \vee (q.ledger[i] = \bot) \vee (p.ledger[i] = q.ledger[i])$.
+Finally, the ledger requires that if some transaction appears at an index $i$, then a process submitted it at that index.
+All the transactions in the non-null entries of the ledger are denoted $p.decided$; 
+formally $p.decided = \{ tx : \exists j. tx \in p.ledger[j] \}$.
+The (history) variable $p.submitted$ holds all the transactions submitted so far by $p$.
 
-Lets `valid(tx, h)` to return true iff the transaction `tx` is valid at height
-`h` of the blockchain.
 
-> The height of the blockchain reflects the state of the application.
-> Some transactions can be valid at a given state (height), but no longer valid
-> in another state (height).
+**Mempool.**
+A mempool is a replicated set of transactions.
+At a process $p$, we write it $p.mempool$.
+We also define $p.hmempool$, the (history) variable that contains all the txs ever added to the mempool by process $p$.
 
-We need to assume for the `valid` predicate a property similar to the one we
-have for the `committed` predicate.
-That is, that from a given height the state of the transaction is not changed
-anymore.
-While this is trivial for the `committed` predicate, we need to assume that
-behavior for the `valid` predicate.
+Below, we list the invariants of the mempool.
 
-So, we need to assume that there is a height `h*` from which a transaction `tx`
-becomes invalid, and this state does not change for higher heights.
-That is, we assume that there is a height `h*` so that for all `h >= h* =>
-valid(tx, h) == FALSE`.
+At each correct process, the mempool is used as an input for the ledger:  
+**INV1.** $\forall tx. \forall p \in Correct. \exists q. \square(tx \in p.submitted \implies p.hmempool)$
 
-This property is realistic as applications are expected to implement some form
-of replay protection.
-This means that once a transaction `tx` is committed, the application should
-reject processing the same transaction `tx` again.
-This is achieved by rejecting `tx` as invalid from the moment that `tx` is
-committed and executed by the application.
-So, a replay protection procedure can be define as:
-`committed(tx, h) => h' > h \and !valid(tx, h')`
+Every decided tx is eventually removed from the mempool:  
+**INV2.** $\forall tx. \forall p \in Correct. \square(tx \in p.decided \implies \lozenge (tx \notin p.mempool))$
 
-Given these definitions, the main property of the mempool is the following:
+In blockchain, a tx is (or not) valid in a given state.
+That is a tx can be valid (or not) at a given height of the ledger.
+To model this, consider that $p.ledger.valid(tx)$ is such a check for the current height of the ledger at process $p$ (ACBI call).
+Our third invariant is that only valid txs are present in the pool:  
+**INV3.** $\forall tx, \forall p \in Correct. \square(tx \in p.mempool \implies p.ledger.valid(tx))$
 
- - If a transaction `tx` is added to the local mempool of a correct node, then
-   eventually we have a height `h*` for which either:
-   - `committed(tx, h*)` is true
-   - or `!valid(tx, h*)` and `h > h* => !valid(tx, h)`
+Finally, we require some progress from the mempool.
+Namely, if a transaction appears at a correct process then eventually it is decided or forever invalid.  
+**INV4** $\forall tx. \forall p \in Correct. \square(tx \in p.hmempool \implies \lozenge\square(tx \in p.decided \vee \neg p.ledger.valid(tx)))$
