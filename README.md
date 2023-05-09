@@ -8,19 +8,24 @@ project.
 It is _always_ a work-in-progress. It is made public in case other people or
 users may find it to be of use/interest.
 
-## Requirements
+## Navigation
 
-At present, [Foam] is used for editing and navigating the content - this may
-change in future as the team explores different tools for managing the knowledge
-base.
+[Foam] is currently being explored as the tool of choice for navigating this
+content. Contributors are free to use whatever tooling they want to navigate the
+content, as long as contributions can be navigated using Foam.
+
+There is currently no intention to make this content easily navigable via
+GitHub, but this may change in future.
 
 ## Structure
 
 This knowledge base is very loosely organized, and is intended to be seen as a
 graph of interrelated notes/ideas/concepts.
 
-- The directory structure does not matter very much, as all content is loaded
-  recursively by the tooling.
+- The directory structure does not matter as much as the logical relationships
+  between notes/ideas/concepts. Generally, tooling that supports Foam-style
+  links (`[[link]]`) scans for content recursively and builds logical views of
+  the content as opposed to hierarchical views.
 - Create one Markdown document per logical concept.
 - If a logical concept is very complex, try to break it down into interrelated
   concepts.
@@ -31,11 +36,11 @@ graph of interrelated notes/ideas/concepts.
 
 ## Contributing
 
-Core team members can make updates directly to the `main` branch without
-submitting pull requests. Only if you feel you need content to be reviewed
-should you submit a pull request.
+Core contributors with write access to the repository can make updates directly
+to the `main` branch without submitting pull requests. If you would like your
+content to be peer-reviewed, please submit a pull request.
 
-For non-core team contributors:
+For non-core contributors:
 - If you find a mistake in any of the concepts you encounter in this repository,
   please submit an issue, or a pull request that addresses the mistake.
 - If you would like to add concepts, or expand on them in some way, please
