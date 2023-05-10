@@ -80,10 +80,10 @@ only validator nodes interact with the mempool in this way.
 
 ### Consensus: all nodes
 
-The consensus protocol is responsible for committing blocks of transactions to
+The consensus protocol is responsible for committing blocks of transactions to 
 the blockchain.
-block should be removed from the mempool, as they are no any longer pending.
 Once a block is committed to the blockchain, all transactions included in the
+block should be removed from the mempool, as they are no any longer pending.
 The consensus protocol thus, as part of the procedure to commit a block,
 informs the mempool the list of transactions included in the committed block.
 The mempool then removes from its local list of pending transactions the
@@ -98,11 +98,11 @@ of the application, which is part of this same procedure to commit a block.
 > The above operation should be part of these other procedures, and should be
 > performed whenever a node commits a new block to the blockchain.
 
-## Formalization Attempt
+## Formalization
 
-In what follows, we try to formalize the notion of mempool.
+In what follows, we formalize the notion of mempool.
 To this end, we first provide a (brief) definition of what is a ledger, that is a replicated log of transactions.
-At some process $p$, we shall write $p.var$ the local variable $var$ at $p$.
+At a process $p$, we shall write $p.var$ the local variable $var$ at $p$.
 
 **Ledger.**
 We use the standard defintion of (BFT) SMR, where each process $p$ has a ledger, written $p.ledger$.
@@ -110,15 +110,14 @@ At process $p$, the $i$-th entry of the ledger is denoted $p.ledger[i]$.
 This entry contains either a null value ($\bot$), or a set of transactions, aka., a block.
 The height of the ledger at $p$ is the index of the first null entry.
 Operation $submit(txs, i)$ attempts to write the set of transactions $txs$ to the $i$-th entry of the ledger.
-As standard, the ledger ensures that there is no hole at each process,
+As standard, the ledger ensures that there is no gap between two entries at each process,
 that is  $\forall i. \forall p. p.ledger[i] \neq \bot \implies (i=0 \vee p.ledger[i-1] \neq \bot)$.
-It also makes sure that no two correct process have different entries;
+It also makes sure that no two correct processes have different ledger entries (agreement);
 formally: $\forall i. \forall p,q \in Correct. (p.ledger[i] = \bot) \vee (q.ledger[i] = \bot) \vee (p.ledger[i] = q.ledger[i])$.
-Finally, the ledger requires that if some transaction appears at an index $i$, then a process submitted it at that index.
+Finally, the ledger requires that if some transaction appears at an index $i$, then a process submitted it at that index (validity).
 All the transactions in the non-null entries of the ledger are denoted $p.decided$; 
-formally $p.decided = \{ tx : \exists j. tx \in p.ledger[j] \}$.
+formally $p.decided = \\{ tx : \exists j. tx \in p.ledger[j] \\}$.
 The (history) variable $p.submitted$ holds all the transactions submitted so far by $p$.
-
 
 **Mempool.**
 A mempool is a replicated set of transactions.
@@ -128,10 +127,10 @@ We also define $p.hmempool$, the (history) variable that contains all the txs ev
 Below, we list the invariants of the mempool.
 
 At each correct process, the mempool is used as an input for the ledger:  
-**INV1.** $\forall tx. \forall p \in Correct. \exists q. \square(tx \in p.submitted \implies p.hmempool)$
+**INV1.** $\forall tx. \forall p \in Correct. \square(tx \in p.submitted \implies tx \in p.hmempool)$
 
-Every decided tx is eventually removed from the mempool:  
-**INV2.** $\forall tx. \forall p \in Correct. \square(tx \in p.decided \implies \lozenge (tx \notin p.mempool))$
+Every decided tx is eventually removed forever from the mempool:  
+**INV2.** $\forall tx. \forall p \in Correct. \square(tx \in p.decided \implies \lozenge\square((tx \notin p.mempool))$
 
 In blockchain, a tx is (or not) valid in a given state.
 That is a tx can be valid (or not) at a given height of the ledger.
@@ -141,4 +140,4 @@ Our third invariant is that only valid txs are present in the pool:
 
 Finally, we require some progress from the mempool.
 Namely, if a transaction appears at a correct process then eventually it is decided or forever invalid.  
-**INV4** $\forall tx. \forall p \in Correct. \square(tx \in p.hmempool \implies \lozenge\square(tx \in p.decided \vee \neg p.ledger.valid(tx)))$
+**INV4** $\forall tx. \forall p \in Correct. \square(tx \in p.mempool \implies \lozenge\square(tx \in p.decided \vee \neg p.ledger.valid(tx)))$
