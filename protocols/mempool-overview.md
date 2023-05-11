@@ -115,8 +115,8 @@ that is  $\forall i. \forall p. p.ledger[i] \neq \bot \implies (i=0 \vee p.ledge
 It also makes sure that no two correct processes have different ledger entries (agreement);
 formally: $\forall i. \forall p,q \in Correct. (p.ledger[i] = \bot) \vee (q.ledger[i] = \bot) \vee (p.ledger[i] = q.ledger[i])$.
 Finally, the ledger requires that if some transaction appears at an index $i$, then a process submitted it at that index (validity).
-All the transactions in the non-null entries of the ledger are denoted $p.decided$; 
-formally $p.decided = \\{ tx : \exists j. tx \in p.ledger[j] \\}$.
+All the transactions in the non-null entries of the ledger are denoted $p.committed$;
+formally $p.committed = \\{ tx : \exists j. tx \in p.ledger[j] \\}$.
 The (history) variable $p.submitted$ holds all the transactions submitted so far by $p$.
 
 **Mempool.**
@@ -129,8 +129,8 @@ Below, we list the invariants of the mempool.
 At each correct process, the mempool is used as an input for the ledger:  
 **INV1.** $\forall tx. \forall p \in Correct. \square(tx \in p.submitted \implies tx \in p.hmempool)$
 
-Every decided tx is eventually removed forever from the mempool:  
-**INV2.** $\forall tx. \forall p \in Correct. \square(tx \in p.decided \implies \lozenge\square((tx \notin p.mempool))$
+Every committed tx is eventually removed forever from the mempool:  
+**INV2.** $\forall tx. \forall p \in Correct. \square(tx \in p.committed \implies \lozenge\square((tx \notin p.mempool))$
 
 In blockchain, a tx is (or not) valid in a given state.
 That is a tx can be valid (or not) at a given height of the ledger.
@@ -139,5 +139,5 @@ Our third invariant is that only valid txs are present in the pool:
 **INV3.** $\forall tx, \forall p \in Correct. \square(tx \in p.mempool \implies p.ledger.valid(tx))$
 
 Finally, we require some progress from the mempool.
-Namely, if a transaction appears at a correct process then eventually it is decided or forever invalid.  
-**INV4** $\forall tx. \forall p \in Correct. \square(tx \in p.mempool \implies \lozenge\square(tx \in p.decided \vee \neg p.ledger.valid(tx)))$
+Namely, if a transaction appears at a correct process then eventually it is committed or forever invalid.  
+**INV4** $\forall tx. \forall p \in Correct. \square(tx \in p.mempool \implies \lozenge\square(tx \in p.committed \vee \neg p.ledger.valid(tx)))$
