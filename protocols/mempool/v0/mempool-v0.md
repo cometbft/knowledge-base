@@ -4,12 +4,12 @@
 
 ### Add a transaction to the mempool
 
-1. The mempool receives transactions either from two sources.
+1. The mempool receives transactions either from two sources. Each transaction is checked individually with `CheckTx`.
     
     - A client sends one transaction via broadcast_tx_* RPC endpoints. 
         [`rpc.core.mempool.broadcast_tx_*`]
     
-    - A peer sends a list of transactions via the P2P layer. Each transaction is checked whether it's valid.
+    - A peer sends a list of transactions via the P2P layer.
         [`mempool.Reactor.Receive`]
 
 2. Process incoming transaction to check its validity. 
@@ -24,47 +24,51 @@
 3. On `CheckTx` response. 
     [`mempool.CListMempool.resCbFirstTime`]
     
-    3a. If tx is valid, add tx to mempool and record its sender.
+    3a. If the transaction is valid, add it to mempool and record its sender.
     
-    3b. If tx is valid but mempool is full, or if tx is invalid, remove it from cache.
+    3b. If the transaction is valid but the mempool is full, or if the the transaction is invalid, then remove it from cache.
+
+### Query transactions in the mempool
+
+4. Consensus reactor reads mempool to create a proposal block.
+    [`state.BlockExecutor.CreateProposalBlock`]
+
+5. Get a list of unconfirmed transactions in the mempool, with a maximum number of entries.
+    [`rpc.core.mempool.unconfirmed_txs`]
 
 ### Update transactions in the mempool
 
-4. Flush to ensure all async requests have completed in the ABCI app before Commit.
-    [`mempool.CListMempool.FlushAppConn`]
+6. BlockExecutor updates the mempool after committing a block.
+    [`state.BlockExecutor.Commit`]
 
-5. Consensus reactor reads mempool to create a proposal block 
-    [`mempool.CListMempool.ReapMaxBytesMaxGas`]
+    6a. Flush to ensure all async requests have completed in the ABCI app before commit.
+        [`mempool.CListMempool.FlushAppConn`]
+    
+    6b. Call `Update` on each transaction in the block. 
 
-6. BlockExecutor updates the mempool after finalizing a block (list of txs).
-    [`mempool.CListMempool.Update`]
-
-7. Update each transaction in the block. 
+7. Update the mempool. 
     [`mempool.CListMempool.Update`]
 
     7a. If a transaction is valid, put it in the cache; otherwise, remove it.
 
     7b. Remove from mempool each tx in the block.
 
-8. Send one `CheckTx` ABCI request to app for every transaction in the block.
-    [`mempool.CListMempool.recheckTxs`]
+    7c. Send one `CheckTx` ABCI request to app for every transaction in the block.
+        [`mempool.CListMempool.recheckTxs`]
 
-9. On `CheckTx` response, if the transaction is invalid.
+8. On `CheckTx` response, if the transaction is invalid.
     [`mempool.CListMempool.resCbRecheck`]
     
-    9a. Remove it from mempool.
+    8a. Remove it from mempool.
     
-    9b. Remove it from cache.
+    8b. Remove it from cache.
 
 ### Propagate transactions
 
-10. Make sure the peer is up to date and get its height.
-    [`peer.Get(types.PeerStateKey).(PeerState)`]
-
-11. Send all transactions in the mempool to the peer, one by one.
+9. Propagate each transaction in the mempool to all peers.
     [`mempool.Reactor.AddPeer/broadcastTxRoutine`]
 
-### Query transactions in the mempool
+    9a. Make sure the peer is up to date; then get its height.
+        [`peer.Get(types.PeerStateKey).(PeerState)`]
 
-12. Get a list of unconfirmed transactions in the mempool, with a maximum number of entries.
-    [`rpc.core.mempool.unconfirmed_txs`]
+    9b. Send all transactions in the mempool to the peer, one by one.
