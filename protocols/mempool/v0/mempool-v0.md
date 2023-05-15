@@ -64,7 +64,7 @@
 11. Send all transactions in the mempool to the peer, one by one.
     [`mempool.Reactor.AddPeer/broadcastTxRoutine`]
 
-### Other RPC endpoints
+### Query transactions in the mempool
 
 12. Get a list of unconfirmed transactions in the mempool, with a maximum number of entries.
     [`rpc.core.mempool.unconfirmed_txs`]
