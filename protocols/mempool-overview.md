@@ -122,20 +122,20 @@ The (history) variable $p.submitted$ holds all the transactions submitted so far
 **Mempool.**
 A mempool is a replicated set of transactions.
 At a process $p$, we write it $p.mempool$.
-We also define $p.hmempool$, the (history) variable that contains all the txs ever added to the mempool by process $p$.
+We also define $p.hmempool$, the (history) variable that contains all the transactions ever added to the mempool by process $p$.
 
-Below, we list the invariants of the mempool.
+Below, we list the invariants of the mempool (at a correct process).
 
-At each correct process, the mempool is used as an input for the ledger:  
+The mempool is used as an input for the ledger:  
 **INV1.** $\forall tx. \forall p \in Correct. \square(tx \in p.submitted \implies tx \in p.hmempool)$
 
-Every committed tx is eventually removed forever from the mempool:  
-**INV2.** $\forall tx. \forall p \in Correct. \square(tx \in p.committed \implies \lozenge\square((tx \notin p.mempool))$
+Committed transactions are not in the mempool:  
+**INV2.** $\forall tx. \forall p \in Correct. \square(tx \in p.committed \implies tx \notin p.mempool)$
 
 In blockchain, a tx is (or not) valid in a given state.
-That is a tx can be valid (or not) at a given height of the ledger.
+That is a transaction can be valid (or not) at a given height of the ledger.
 To model this, consider that $p.ledger.valid(tx)$ is such a check for the current height of the ledger at process $p$ (ACBI call).
-Our third invariant is that only valid txs are present in the pool:  
+Our third invariant is that only valid transactions are present in the mempool:  
 **INV3.** $\forall tx, \forall p \in Correct. \square(tx \in p.mempool \implies p.ledger.valid(tx))$
 
 Finally, we require some progress from the mempool.
