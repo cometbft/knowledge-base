@@ -1,7 +1,12 @@
-# Mempool V0 implementation (WIP)
+# Mempool implementation (WIP)
+
+This document describes the implementation of the mempool in CometBFT v0.38.x,
+the one called v0, that is, the simple implementation of the mempool as a queue
+of transactions over a simple push-based gossip protocol.
 
 ![Mempool](./mempool-v0.svg)
 
+## Main actions from and onto the mempool
 ### Add a transaction to the mempool
 
 1. The mempool receives transactions either from two sources. Each transaction
@@ -83,7 +88,7 @@
     8c. If there are still transactions in the mempool, notify Consensus.
         [[`mempool.CListMempool.notifyTxsAvailable`][notifyTxsAvailable]]
 
-### Propagate transactions to peers
+### Propagate validated transactions to peers
 
 9. Propagate each transaction in the mempool to all peers.
     [[`mempool.Reactor.broadcastTxRoutine`][broadcastTxRoutine]]
@@ -94,6 +99,9 @@
 
     9b. Make sure the peer is up to date; then get its height.
         [[`peer.Get(types.PeerStateKey).(PeerState)`][Peer.Get]]
+      - If we suspect that the peer is lagging behind, wait some time before
+        checking again if the peer has caught up. See
+        [RFC-103](https://github.com/cometbft/cometbft/blob/main/docs/rfc/rfc-103-incoming-txs-when-catching-up.md)
 
     9c. Send all transactions in the mempool to the peer, one by one.
 
