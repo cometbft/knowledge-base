@@ -68,7 +68,9 @@
 9. Propagate each transaction in the mempool to all peers.
     [`mempool.Reactor.AddPeer/broadcastTxRoutine`]
 
-    9a. Make sure the peer is up to date; then get its height.
+    9a. Loop through the mempool.
+
+    9b. Make sure the peer is up to date; then get its height.
         [`peer.Get(types.PeerStateKey).(PeerState)`]
 
-    9b. Send all transactions in the mempool to the peer, one by one.
+    9c. Send all transactions in the mempool to the peer, one by one.
