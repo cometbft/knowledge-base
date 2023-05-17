@@ -96,7 +96,7 @@ module MempoolTests {
         require(isValid(ledger, p, t)),
 	ledger' = ledger,
         mempool' = add(mempool, p, t),
-	hmempool' = hmempool
+	hmempool' = hmempool.set(p, hmempool.get(p).union(Set(t)))
       }
     }
 
@@ -106,7 +106,7 @@ module MempoolTests {
         require(txs.forall(t => isValid(ledger, p, t)) and maySubmit(ledger, p, txs)),
 	ledger' = submit(ledger, p, txs),
       	mempool' = mempool,
-	hmempool' = hmempool.set(p, hmempool.get(p).union(txs))
+	hmempool' = hmempool
       }
     }
 

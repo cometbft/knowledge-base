@@ -38,11 +38,11 @@ module Consensus{
 
     pure def mayPropose(state: ConsensusState, p: Process, txs: Set[Tx]): bool = processes(state).contains(p) and not(hasProposed(state, p)) and txs.size()!=0
 
-    pure def mayDecide(state: ConsensusState, p: Process): bool = processes(state).contains(p) and state.hasProposed(p) and not(state.hasDecided(p))
+    pure def mayDecide(state: ConsensusState, p: Process): bool = processes(state).contains(p) and size(getProposed(state)) > 0 and not(state.hasDecided(p))
 
     pure def propose(state: ConsensusState, p: Process, txs: Set[Tx]): ConsensusState = {
       val newProposed = state.proposed.set(p, txs)
-      state.with("proposed", newProposed)
+      {proposed: newProposed, ...state}
     }
 
     // decide any proposed values
@@ -51,7 +51,7 @@ module Consensus{
       val decisions = state.decided.keys().filter(x => state.decided.get(x).size()>0)
       val decision = if (decisions.size()>0) {state.decided.get(oneOf(decisions))}  else {proposal}
       val newDecided = state.decided.set(p, decision)
-      state.with("decided",newDecided)
+      {decided: newDecided, ...state}
     }
 
     // INVARIANTS
@@ -59,18 +59,19 @@ module Consensus{
     // Irrevocability: a process decides at most once
     // This requires applying Consensus:mayDecide before Consensus:decide.
     
-    // Validity: a process decides only submitted values
+    // Validity: a process decides only proposed values
     pure def consensusValidityInv(state: ConsensusState): bool = {
       processes(state).forall(
-        p => not(hasDecided(state, p))
-	     or
-	     state.proposed.keys().filter(q => state.proposed.get(q) == state.decided.get(p)).size()>0
+        p => or {
+	       not(hasDecided(state, p)),
+	       state.proposed.keys().filter(q => state.proposed.get(q) == state.decided.get(p)).size()>0
+	     } 
       )
     }
     
     // Agreement: no two processes decide different values
     pure def consensusAgreementInv(state: ConsensusState): bool = {
-       processes(state).forall(x => processes(state).forall(y => setEqualsOrOneEmpty(state.decided.get(x), state.decided.get(y))))
+      size(mapValues(state.decided).filter(x => x.size()>0)) <= 1
     }
 
 }

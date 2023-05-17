@@ -50,7 +50,7 @@ module Ledger{
     pure def submit(state: LedgerState, p: Process, txs: Set[Tx]): LedgerState = {
       val currentConsensus = state.log[heightOf(state,p)]
       val nextLog = state.log.replaceAt(heightOf(state,p), currentConsensus.propose(p, txs))
-      state.with("log", nextLog)
+      {log: nextLog, ...state}
     }
 
     pure def commit(state: LedgerState, p: Process): LedgerState = {
@@ -65,12 +65,12 @@ module Ledger{
 
     // INVARIANTS
 
-    // Validity: every entry is submitted
+    // Validity: every non-null entry is submitted
     pure def ledgerValidityInv(state: LedgerState): bool = {
       0.to(height(state)).forall(h => consensusValidityInv(state.log[h]))
     }
     
-    // Order: for any two processes, entries are prefix one from another
+    // Total Order: for any two processes, entries are prefix one from another
     pure def ledgerOrdertInv(state: LedgerState): bool = {
       0.to(height(state)-1).forall(h => consensusAgreementInv(state.log[h]))
     }
