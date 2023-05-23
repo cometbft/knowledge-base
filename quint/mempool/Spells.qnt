@@ -14,4 +14,8 @@ module Spells{
       m.keys().fold(Set(), (s, i) => s.union(Set(m.get(i))))
     }
 
+    pure def setChooseSome(s: Set[x]): x = {
+      head(s.fold(List(), (t,x) => t.append(x)))
+    }
+    
 }

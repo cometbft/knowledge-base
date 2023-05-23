@@ -87,37 +87,37 @@ module MempoolTests {
       all {
         ledger' = nledger,
         mempool' = newMemPool(PROCESSES),
-	hmempool' = PROCESSES.mapBy(p => Set())
+        hmempool' = PROCESSES.mapBy(p => Set())
       }
     }
 
     action doClient(p: Process, t: Tx): bool = all {
       all {
         require(isValid(ledger, p, t)),
-	ledger' = ledger,
+        ledger' = ledger,
         mempool' = add(mempool, p, t),
-	hmempool' = hmempool.set(p, hmempool.get(p).union(Set(t)))
+        hmempool' = hmempool.set(p, hmempool.get(p).union(Set(t)))
       }
     }
 
     action doSubmit(p: Process): bool = all {
       val txs = reap(mempool, p, 1)
       all {
-        require(txs.forall(t => isValid(ledger, p, t)) and maySubmit(ledger, p, txs)),
-	ledger' = submit(ledger, p, txs),
+        require(txs.forall(t => ledger.isValid(p, t)) and ledger.maySubmit(p, txs)),
+        ledger' = ledger.submit(p, txs),
       	mempool' = mempool,
-	hmempool' = hmempool
+        hmempool' = hmempool
       }
     }
 
     action doCommitThenUpdate(p: Process): bool = all {
-      val nledger = if (mayCommit(ledger, p)) commit(ledger, p) else ledger
-      val nmempool = if (heightOf(ledger, p)!=heightOf(nledger, p)) update(mempool, p, nledger, lastEntry(nledger, p)) else mempool
+      val nledger = ledger.commit(p)
+      val nmempool = mempool.update(p, nledger, nledger.lastEntry(p))
       all {
-        require(mayCommit(ledger, p)),
-	ledger' = nledger,
+        require(ledger.mayCommit(p)),
+        ledger' = nledger,
         mempool' = nmempool,
-	hmempool' = hmempool
+        hmempool' = hmempool
       }
     }
 
@@ -127,7 +127,7 @@ module MempoolTests {
       any {
         doClient(p,t),
         doSubmit(p),
-	doCommitThenUpdate(p)
+        doCommitThenUpdate(p)
       }	
     }
 
@@ -136,17 +136,17 @@ module MempoolTests {
     
     // INV1. the mempool is used as an input for the ledger
     def inv1() = {
-      PROCESSES.forall(p => getSubmittedFor(ledger,p).subseteq(hmempool.get(p)))
+      PROCESSES.forall(p => ledger.getSubmittedFor(p).subseteq(hmempool.get(p)))
     }
 
     // INV2. committed transactions are not in the mempool
     def inv2() = {
-      PROCESSES.forall(p => 0.to(heightOf(ledger, p)-1).forall(i =>  entry(ledger, p, i).intersect(poolOf(mempool, p)).size()==0))
+      PROCESSES.forall(p => 0.to(ledger.heightOf(p)-1).forall(i =>  ledger.entry(p, i).intersect(mempool.poolOf(p)).size()==0))
     }
 
     // INV3. every transaction in the mempool is valid
     def inv3() = {
-      PROCESSES.forall(p => poolOf(mempool, p).forall(t => isValid(ledger, p, t)))
+      PROCESSES.forall(p => mempool.poolOf(p).forall(t => ledger.isValid(p, t)))
     }
     
     // INV4. every transaction that appears in the mempool is eventually committed or forever invalid
@@ -154,11 +154,10 @@ module MempoolTests {
     // instead we consider the (weaker) invariant below
     // INV4b. every transaction in hmempool is always committed or if valid then still in the mempool
     def inv4() = {
-      PROCESSES.forall(p => hmempool.get(p).forall(tx => isCommittedFor(ledger, p, tx) or not(isValid(ledger, p, tx)) or poolOf(mempool, p).contains(tx)))
+      PROCESSES.forall(p => hmempool.get(p).forall(tx => ledger.isCommittedFor(p, tx) or not(ledger.isValid(p, tx)) or mempool.poolOf(p).contains(tx)))
     }
 
     def allInv = {inv1 and inv2 and inv3 and inv4}
-    
 
     run moveHeightOnce = {
       nondet p = oneOf(PROCESSES)
