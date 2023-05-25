@@ -1,8 +1,8 @@
-# Mempool implementation (WIP)
+# Mempool implementation (v0)
 
-This document describes the implementation of the mempool in CometBFT v0.38.x,
-the one called v0, that is, the simple implementation of the mempool as a queue
-of transactions over a simple push-based gossip protocol.
+This document describes the implementation of the mempool in CometBFT v0.38.x.
+This implementation, called v0, is simply a queue of transactions with a cache
+over a basic push-based gossip protocol.
 
 ![Mempool](./mempool-v0.svg)
 
