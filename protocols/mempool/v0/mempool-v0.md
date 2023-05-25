@@ -148,4 +148,8 @@ of transactions over a simple push-based gossip protocol.
 [Update]: https://github.com/cometbft/cometbft/blob/v0.38.x/mempool/clist_mempool.go#L577
 [recheckTxs]: https://github.com/cometbft/cometbft/blob/v0.38.x/mempool/clist_mempool.go#L641
 
+[CreateProposalBlock]: https://github.com/cometbft/cometbft/blob/v0.38.x/state/execution.go#L101
+[Commit]: https://github.com/cometbft/cometbft/blob/v0.38.x/state/execution.go#L351
+[PeerState]: https://github.com/cometbft/cometbft/blob/v0.38.x/consensus/reactor.go#L1021
+
 [Peer.Get]: https://github.com/CometBFT/cometbft/blob/v0.38.x/p2p/peer.go#L44
