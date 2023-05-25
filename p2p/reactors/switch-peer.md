@@ -1,4 +1,4 @@
-# Reactors: `Switch` and `Peer` API
+# Reactors: `Switch` and `Peer` APIs
 
 This document derives from discussions on CometBFT's [PR 851][pr-851].
 The PR documents the API that the p2p layer offers to the protocol layer,
@@ -9,6 +9,38 @@ connected peer.
 
 This document discusses why the [p2p API for reactors][p2p-api] is provided
 both by the `Switch` and a number of `Peer` instances.
+
+
+## `Switch` instance
+
+The main point of discussion in the case of the `Switch` is that several of its
+most used methods include a `Peer` instance.
+
+This is the case of the methods to disconnect from a peer (`StopPeerForError`
+and `StopPeerGracefully`) and mark a peer as good (`MarkPeerAsGood`).
+Those methods could instead be offered by the `Peer` interface.
+The problem is that their implementation requires information and logic
+belonging to the `Switch` instance and would therefore require some processing
+by the `Switch`.
+
+There are also `Switch` methods that use the list of connected peers:
+`Peers()`, `NumPeers()`, and `Broadcast()`.
+Those methods could be implemented by reactors themselves, as they are aware of
+the list of connected peers.
+This approach, however, has two disadvantages.
+
+The first is the possible repetition of code in every reactor to retrieve the
+information or to implement the broadcast action; there is also no indication
+that the reactor's implementation would be easier to read or more efficient.
+The second problem is the fact that the set of connected peers known by a
+reactor and the actual set of connected peers maintained by the `Switch` are
+not always the same.
+While most of the time they should be identical, during the procedure to add or
+remove a peer, the state at some reactors might differ from the state at the
+`Switch`.
+Reactors' implementation of such methods would therefore keep that possibility
+in mind.
+
 
 ## `Peer` instances
 
@@ -97,35 +129,6 @@ connection.
 Notice that the problem is not with the particular implementation of the
 `Switch.Broadcast()` method: if the reactors implemented the same, the message
 would be serialized multiple times in the same way.
-
-## `Switch` instance
-
-The main point of discussion in the case of the `Switch` is that several of its
-most used methods include a `Peer` instance.
-
-This is the case of the methods to disconnect from a peer (`StopPeerForError`
-and `StopPeerGracefully`) and mark a peer as good (`MarkPeerAsGood`).
-Those methods can instead be offered by the `Peer` interface.
-The problem is that their implementation requires information and logic
-belonging to the `Switch` instance.
-
-There are also `Switch` methods that use the list of connected peers:
-`Peers()`, `NumPeers()`, and `Broadcast()`).
-Those methods could be implemented by reactors themselves, as they are
-informed about connected peers by the `Switch`.
-This approach, however, has two disadvantages.
-
-The first is the possible repetition of code in every reactor to retrieve the
-information or to implement the broadcast action; there is also no indication
-that the reactor's implementation would be easier to read or more efficient.
-The second problem is the fact that the set of connected peers known by a
-reactor and the actual set of connected peers maintained by the `Switch` are
-not always the same.
-While most of the time they should be identical, during the procedure to add or
-remove a peer, the state at some reactors might differ from the state at the
-`Switch`.
-Reactors' implementation of such methods would therefore keep that possibility
-in mind.
 
 [pr-851]: https://github.com/cometbft/cometbft/pull/851
 [p2p-api]: pr-851
