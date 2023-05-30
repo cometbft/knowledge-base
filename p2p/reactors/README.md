@@ -22,4 +22,6 @@ The discussed topics are in companion files:
   this separation, while providing some extra details of the intricated
   relation between `Peer` instances and the `Switch`.
 
+The goal is to collect the ideas here, discuss them, and see what should go into issues on the main repo.
+
 [pr-851]: https://github.com/cometbft/cometbft/pull/851
