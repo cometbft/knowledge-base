@@ -1,7 +1,8 @@
 # Reactors: `Switch` and `Peer` APIs
 
-This document derives from discussions on CometBFT's [PR 851][pr-851].
-The PR documents the API that the p2p layer offers to the protocol layer,
+This document derives from discussions on [CometBFT's PR #851][pr-851].
+
+PR #851 documents the API that the p2p layer offers to the protocol layer,
 namely to reactors.
 This API is split into two interfaces: the methods provided the `Switch`
 instance and the methods provided by multiple `Peer` instances, one per
@@ -131,8 +132,8 @@ Notice that the problem is not with the particular implementation of the
 would be serialized multiple times in the same way.
 
 [pr-851]: https://github.com/cometbft/cometbft/pull/851
-[p2p-api]: pr-851
-[reactors-doc]: pr-851
+[p2p-api]: https://github.com/cometbft/cometbft/blob/main/spec/p2p/reactor/p2p-api.md
+[reactors-doc]: https://github.com/cometbft/cometbft/blob/main/spec/p2p/reactor/reactor.md
 
 [peer-iface]: https://github.com/cometbft/cometbft/blob/main/p2p/peer.go
 [mconn-type]: https://github.com/cometbft/cometbft/blob/main/p2p/conn/connection.go

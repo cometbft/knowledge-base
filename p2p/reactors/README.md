@@ -15,7 +15,7 @@ The discussed topics are in companion files:
 - [`stop-peer.md`](./stop-peer.md): the `Switch` provides a method for stopping
   a peer due to an error. This method has a `reason` field which actual use is
   not specified or implemented. Moreover, the same `Switch` method is used by
-  multiplex connections as well, in addition to reactors (WIP).
+  multiplex connections as well, in addition to reactors.
 - [`switch-peer.md`](./switch-peer.md): the API for reactors is split in two
   parts: methods provided by the `Switch` type and methods provided by the
   multiple `Peer` instances, one per connected peer. Discusses the reasons for
