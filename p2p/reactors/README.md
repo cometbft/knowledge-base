@@ -7,7 +7,7 @@ The discussed topics are in companion files:
 - [`peer-kvstore.md`](./peer-kvstore.md): discussion regarding the key-value
   store provided by the `Peer` interface to reactors. It is used as a state
   sharing mechanism. Details about the specific use from Consensus, Mempool,
-  and Evidence reactors (WIP).
+  and Evidence reactors.
 - [`peer-quality.md`](./peer-quality.md): the `Switch` provides a method for
   marking peers as good, only used by the consensus reactor. There is no method
   for marking a peer as bad or banning a peer. Details of the PEX reactor uses
