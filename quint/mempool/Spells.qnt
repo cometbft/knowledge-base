@@ -17,5 +17,9 @@ module Spells{
     pure def setChooseSome(s: Set[x]): x = {
       head(s.fold(List(), (t,x) => t.append(x)))
     }
+
+    pure def nonEmptyPowerset(s: Set[x]): Set[Set[x]] = {
+     s.powerset().exclude(Set(Set()))
+   }
     
 }

@@ -1,7 +1,7 @@
 // -*- mode: Bluespec; -*-
-// A Ledger is a replicated log of blocks (i.e., set of transactions).
+// A Ledger is a replicated log of blocks.
 // The specification below considers that
-// - replication is made with consensus (SMR)
+// - replication is made with consensus (see Consensus.qnt)
 // - idempotence is not granted (that is, two log entries might have transactions in common).
 
 module Ledger{
@@ -17,6 +17,8 @@ module Ledger{
     pure def newLedger(P: Set[Process]): LedgerState = {
       log: List(newConsensus(P))
     }
+
+    // 1. helpers
 
     // index of the first null entry
     pure def height(state: LedgerState): int = {
@@ -39,6 +41,10 @@ module Ledger{
       0.to(state.heightOf(p)).fold(Set(), (s, i) => s.union(state.log[i].proposalOf(p)))
     }
 
+    pure def getCommittedFor(state: LedgerState, p: Process): Set[Tx] = {
+      0.to(state.heightOf(p)).fold(Set(), (s, i) => s.union(state.log[i].decisionOf(p)))
+    }
+
     pure def isSubmitted(state: LedgerState, t: Tx): bool = {
       0.to(state.height()).exists(h => state.log[h].isProposed(t))
     }
@@ -51,6 +57,8 @@ module Ledger{
       if (state.heightOf(p)==0) false else 0.to(state.heightOf(p)-1).exists(h => state.log[h].isDecided(t))
     }
 
+    // 2. preconditions
+
     pure def maySubmit(state: LedgerState, p: Process, txs: Set[Tx]): bool = {
       state.log[state.heightOf(p)].mayPropose(p, txs)
     }
@@ -58,6 +66,8 @@ module Ledger{
     pure def mayCommit(state: LedgerState, p: Process): bool = {
       state.log[state.heightOf(p)].mayDecide(p)
     }
+
+    // 3. transitions
 
     pure def submit(state: LedgerState, p: Process, txs: Set[Tx]): LedgerState = {
       val currentConsensus = state.log[heightOf(state,p)]
@@ -72,100 +82,105 @@ module Ledger{
       } else {
     	  state.log
       }
-      state.with("log", nextLog.replaceAt(heightOf(state,p), currentConsensus.decide(p)))
+      {log: nextLog.replaceAt(heightOf(state,p), currentConsensus.decide(p)), ...state}
     }
 
-    // INVARIANTS
+    // 4. state machine
 
-    // Validity: every non-null entry is submitted
+    var _ledger: LedgerState
+
+    action ledgerInit = all {
+        _ledger' = newLedger(PROCESSES)
+    }
+
+    action ledgerDoSubmit = all {
+      nondet p = oneOf(PROCESSES)
+      nondet txs = oneOf(nonEmptyPowerset(TXS))
+      all {
+        require(_ledger.maySubmit(p, txs)),
+    	_ledger' = _ledger.submit(p, txs)
+      }
+    }
+
+    action ledgerDoCommit = all {
+      nondet p = oneOf(PROCESSES)
+      all {
+        require(_ledger.mayCommit(p)),
+        _ledger' = _ledger.commit(p)
+      }
+    }
+
+    action ledgerStep = any {
+      ledgerDoSubmit,
+      ledgerDoCommit
+    }
+
+    // 5. invariants
+
+    // Validity: every non-null entry is submitted.
     pure def ledgerValidityInv(state: LedgerState): bool = {
       0.to(state.height()).forall(h => consensusValidityInv(state.log[h]))
     }
     
-    // Total Order: for any two processes, entries are prefix one from another
+    // Total Order: for any two processes, entries are prefix one from another.
     pure def ledgerOrdertInv(state: LedgerState): bool = {
       0.to(state.height()-1).forall(h => consensusAgreementInv(state.log[h]))
     }
 
-}
+    // Stability: for every process, its entry always grows.
+    // temporal ledgerStabilityInv = {
+    //   and {
+    //     _ledger.height() <= next(_ledger.height()),	
+    //     0.to(_ledger.height()).forall(h => _ledger.log[h].isSupersededBy(next(_ledger.log[h])))
+    //   }
+    // }
+    // FIXME. cannot be verified yet
 
-module LedgerTests {
-
-    import Spells.* from "Spells"
-    import System.* from "System"
-    import Ledger.*
-
-    pure val PROCESSES=Set("alice", "bob", "charlie")
-    pure val TXS=Set("T0", "T1", "T2", "T3")
-
-    var st: LedgerState
-
-    val invariant: bool = {
-      ledgerValidityInv(st) and ledgerOrdertInv(st)
-    }
-
-    action init = all {
-        st' = newLedger(PROCESSES)
-    }
-
-    action doSubmit = all {
-      nondet p = oneOf(PROCESSES)
-      nondet txs = oneOf(TXS.powerset())
-      all {
-        require(st.maySubmit(p, txs)),
-    	st' = st.submit(p, txs)
+    val ledgerInvariant = {
+      and {
+        ledgerValidityInv(_ledger),
+        ledgerOrdertInv(_ledger)
       }
     }
 
-    action doCommit = all {
+    // 6. tests
+    
+    run submitTwiceErrorTest = {
       nondet p = oneOf(PROCESSES)
-      all {
-        require(st.mayCommit(p)),
-        st' = st.commit(p)
-      }
-    }
-
-    action step = any {
-      doSubmit,
-      doCommit
-    }
-
-    run submitTwiceError = {
-      nondet p = oneOf(PROCESSES)
-      nondet txs = oneOf(TXS.powerset())
-      init
+      nondet txs = oneOf(nonEmptyPowerset(TXS))
+      ledgerInit
       .then(
         all {
-          st.submit(p, txs).maySubmit(p, txs),
-          st'=st
+          _ledger.submit(p, txs).maySubmit(p, txs),
+          _ledger'=_ledger
        }
       )
       .fail()
     }
 
-    run commitNonSubmittedError = {
+    run commitNonSubmittedErrorTest = {
       nondet p = oneOf(PROCESSES)
-      init
+      ledgerInit
       .then(
         all {
-    	  st.mayCommit(p),
-          st'=st
+    	  _ledger.mayCommit(p),
+          _ledger'=_ledger
         }
       )
       .fail()
     }
 
-    run commitSubmittedSuccess = {
+    run commitSubmittedSuccessTest = {
       nondet p = oneOf(PROCESSES)
       nondet q = oneOf(PROCESSES)
-      nondet txs0 = oneOf(TXS.powerset())
-      nondet txs1 = oneOf(TXS.powerset())
-      init
-      .then(st' = st.submit(p, txs0).submit(q, txs1))
+      nondet txs0 = oneOf(nonEmptyPowerset(TXS))
+      nondet txs1 = oneOf(nonEmptyPowerset(TXS))
+      ledgerInit
+      .then(_ledger' = _ledger.submit(p, txs0).submit(q, txs1))
       .then(
         all {
-          st.mayCommit(p) and heightOf(st.commit(p), p)==1,
-          st'=st
+          _ledger.mayCommit(p) and heightOf(_ledger.commit(p), p)==1,
+          _ledger'=_ledger
        }
       )
     }
