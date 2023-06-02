@@ -137,7 +137,7 @@ module Mempool {
         doClient(p,t),
         doSubmit(p),
         doCommitThenUpdate(p),
-	doGossipThenUpdate(p,q)
+        doGossipThenUpdate(p,q)
       }	
     }
 

@@ -19,7 +19,7 @@ module Spells{
     }
 
     pure def nonEmptyPowerset(s: Set[x]): Set[Set[x]] = {
-     s.powerset().exclude(Set(Set()))
-   }
+      s.powerset().exclude(Set(Set()))
+    }
     
 }

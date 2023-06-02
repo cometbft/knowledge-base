@@ -98,7 +98,7 @@ module Ledger{
       nondet txs = oneOf(nonEmptyPowerset(TXS))
       all {
         require(_ledger.maySubmit(p, txs)),
-    	_ledger' = _ledger.submit(p, txs)
+        _ledger' = _ledger.submit(p, txs)
       }
     }
 
@@ -163,7 +163,7 @@ module Ledger{
       ledgerInit
       .then(
         all {
-    	  _ledger.mayCommit(p),
+          _ledger.mayCommit(p),
           _ledger'=_ledger
         }
       )

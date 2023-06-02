@@ -58,15 +58,14 @@ module Consensus{
       flatten(mapValues(state.decided))
     }
 
+    // this function is useful when comparing two instances of consensus over time
+    // (as e.g., in the stability invariant of the ledger)
+    // state0 is superseded by state1 when all the processes have made more progress in state1 than in state0.
     pure def isSupersededBy(state0: ConsensusState, state1: ConsensusState): bool = {
       and {
         state0.processes() == state1.processes(),
-	state0.processes().forall(
-	  p =>
-	    or {
-	      not(state0.hasDecided(p)) and state1.hasDecided(p),
-	      state0.hasDecided(p) and state1.hasDecided(p)
-	    }
+        state0.processes().forall(
+          p => not(state0.hasDecided(p) and not(state1.hasDecided(p)))
         )
       }
     }
@@ -88,7 +87,7 @@ module Consensus{
       {proposed: newProposed, ...state}
     }
 
-    // decide any proposed of the values
+    // decide any of the proposed values
     pure def decide(state: ConsensusState, p: Process): ConsensusState = {
       val proposal = state.proposed.get(setChooseSome(state.proposed.keys().filter(x => state.proposed.get(x).size()>0)))
       val decisions = state.decided.keys().filter(x => state.decided.get(x).size()>0)
@@ -129,17 +128,14 @@ module Consensus{
 
     // 5. invariants
         
-    // Validity: a process decides only proposed values and such values are non-empty set of transactions
+    // Validity: a process may only decide proposed values
     pure def consensusValidityInv(state: ConsensusState): bool = {    
         state.processes().forall(
         p => or {
-    	       not(state.hasDecided(p)),
-    	       and {
-                   state.decisionOf(p).size()>0,
-                   state.proposed.keys().filter(q => state.proposed.get(q) == state.decided.get(p)).size()>0
-    	       }
-    	     } 
-      )
+                  not(state.hasDecided(p)),
+                  state.proposed.keys().filter(q => state.proposed.get(q) == state.decided.get(p)).size()>0
+    	        }
+        )
     }
     
     // Agreement: no two processes decide different values
