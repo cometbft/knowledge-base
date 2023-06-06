@@ -48,7 +48,7 @@ over a basic push-based gossip protocol.
     [[`state.BlockExecutor.CreateProposalBlock`][CreateProposalBlock]]
 
 5. Get a list of unconfirmed transactions in the mempool, with a maximum number
-    of entries. [[`rpc.core.mempool.unconfirmed_txs`][unconfirmed_txs]]
+   of entries. [[`rpc.core.mempool.unconfirmed_txs`][unconfirmed_txs]]
 
 ### Update transactions in the mempool
 
@@ -56,8 +56,8 @@ over a basic push-based gossip protocol.
     [[`state.BlockExecutor.Commit`][Commit]]
 
     6a. Flush to ensure all async requests have completed in the ABCI app before
-        commit. [[`mempool.CListMempool.FlushAppConn`][FlushAppConn]]
-    
+        commit (see the [note below](#flush)). [[`mempool.CListMempool.FlushAppConn`][FlushAppConn]]
+
     6b. Call mempool's `Update` for all transactions in the block. 
 
 7. Update the mempool. [[`mempool.CListMempool.Update`][Update]]
@@ -153,3 +153,17 @@ over a basic push-based gossip protocol.
 [PeerState]: https://github.com/cometbft/cometbft/blob/v0.38.x/consensus/reactor.go#L1021
 
 [Peer.Get]: https://github.com/CometBFT/cometbft/blob/v0.38.x/p2p/peer.go#L44
+
+## Notes
+
+### Flush
+
+In practice, the ABCI `Flush` method has no practical side effects on the system
+(see
+[tendermint/tendermint#6994](https://github.com/tendermint/tendermint/issues/6994)).
+While simplifying the client interface for v0.36, it was proposed to remove it
+(see comments in
+[tendermint/tendermint#7607](https://github.com/tendermint/tendermint/issues/7607)).
+The client interface for ABCI has [a
+comment](https://github.com/CometBFT/cometbft/blob/4790ea3e46475064d5475c787427ae926c5a9e94/abci/client/client.go#L31)
+saying that this method should be removed as it is not implemented.
