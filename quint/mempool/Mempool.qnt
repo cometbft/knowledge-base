@@ -8,9 +8,8 @@ module ABCI {
     import System.* from "System"
     import Ledger.* from "Ledger"
 
-    // a transaction is committed at most once
     pure def isValid(l: LedgerState, p: Process, t: Tx): bool = {
-      not(isCommittedFor(l, p, t))
+      true
     }
 
 }
@@ -23,139 +22,144 @@ module Mempool {
     import ABCI.*
 
     type MempoolState = {
-      pool: Process -> Set[Tx],
+      mempool: Process -> Set[Tx],
+      hmempool: Process -> Set[Tx], // history variable
+      ledger: LedgerState
     }
 
-    pure def newMemPool(P: Set[Process]): MempoolState = {
-      pool: P.mapBy(p => Set()),
+    pure def newMempoolState(P: Set[Process]): MempoolState = {
+      ledger: newLedger(P),
+      mempool: P.mapBy(p => Set()),
+      hmempool: P.mapBy(p => Set())
     }
 
-    // 1. helpers
+    //// helpers
 
-    pure def txsAvailable(state: MempoolState, p: Process): Set[Tx] = {
-      state.pool.get(p)
+    pure def txsAvailable(st: MempoolState, p: Process): Set[Tx] = {
+      st.mempool.get(p)
     }
 
-    pure def poolSize(state: MempoolState, p: Process): int = {
-      state.pool.get(p).size()
+    pure def txsSize(st: MempoolState, p: Process): int = {
+      st.mempool.get(p).size()
     }
 
-    pure def reap(state: MempoolState, p: Process, max: int): Set[Tx] = {
-      setSubsetOfAtMost(state.pool.get(p), max)
+    pure def reap(st: MempoolState, p: Process, max: int): Set[Tx] = {
+      setSubsetOfAtMost(st.mempool.get(p), max)
     }
 
-    pure def poolOf(state: MempoolState, p: Process): Set[Tx] = {
-      state.pool.get(p)
+    pure def txsOf(st: MempoolState, p: Process): Set[Tx] = {
+      st.mempool.get(p)
     }
 
-    // 2. preconditions
-    // none, as we use mostly the ones of the ledger 
-
-    // 3. transitions
-
-    pure def add(state: MempoolState, p: Process, txs: Set[Tx]): MempoolState = {
-      {pool: state.pool.set(p, state.pool.get(p).union(txs)), ...state}
+    pure def isValidAndNotCommittedFor(ledger: LedgerState, p: Process, tx: Tx): bool = {
+      isValid(ledger, p, tx) and not(ledger.getCommittedFor(p).contains(tx))
     }
 
-    pure def clear(state: MempoolState, p: Process): MempoolState = {
-      {pool: state.pool.set(p, Set()), ...state}
+    //// conditions
+
+    pure def mayRcvFromClientAt(st: MempoolState, p: Process, txs: Set[Tx]): bool = {
+      and {
+        not(txs.subseteq(st.txsOf(p))), // to avoid stuttering
+        txs.forall(tx => isValidAndNotCommittedFor(st.ledger, p, tx))
+      }
     }
 
-    pure def remove(state: MempoolState, p: Process, t: Tx): MempoolState = {
-      {pool: state.pool.set(p, state.pool.get(p).exclude(Set(t))), ...state}
+    pure def mayRcvFromProcessAt(st: MempoolState, p: Process, q: Process, txs: Set[Tx]): bool = {
+      and {
+        p != q,
+	      not(txs.subseteq(st.txsOf(q))), // to avoid stuttering
+        not(st.ledger.heightOf(p) < st.ledger.heightOf(q)),
+      }
     }
 
-    // remove committed and invalid txs from the mempool
-    pure def update(state: MempoolState, p: Process, l: LedgerState): MempoolState = {
-      {pool: state.pool.set(p, state.pool.get(p).exclude(l.getCommittedFor(p)).filter(t => isValid(l, p, t))), ...state}      
+    pure def maySubmitToLedger(st: MempoolState, p: Process, txs: Set[Tx]) : bool = {
+      and {
+        txs.forall(t => st.ledger.isValid(p, t)),
+	      st.ledger.maySubmit(p, txs)
+      }
     }
 
-    // 4. state machine
+    //// transitions
 
-    var ledger: LedgerState
-    var mempool: MempoolState
-    var hmempool: Process -> Set[Tx] // history variable 
+    pure def add(st: MempoolState, p: Process, txs: Set[Tx]): MempoolState = {
+      val nmempool = st.mempool.set(p, st.mempool.get(p).union(txs))
+      val nhmempool = st.hmempool.set(p, st.hmempool.get(p).union(txs))
+      {mempool: nmempool, hmempool: nhmempool, ...st}
+    }
 
-    val print = {ledger: ledger, mempool: mempool, hmempool: hmempool}
+    pure def commitThenUpdate(st: MempoolState, p: Process): MempoolState = {
+      val nledger = st.ledger.commit(p)
+      val nmempool = st.mempool.set(p, st.mempool.get(p).filter(tx => isValidAndNotCommittedFor(nledger, p, tx)))
+      {mempool: nmempool, ledger: nledger, ...st}
+    }
+
+    //// state machine
+
+    var _state: MempoolState
 
     action init : bool = all {
-      val nledger = newLedger(PROCESSES)
       all {
-        ledger' = nledger,
-        mempool' = newMemPool(PROCESSES),
-        hmempool' = PROCESSES.mapBy(p => Set())
+        _state' = newMempoolState(PROCESSES)
       }
     }
 
-    action doClient(p: Process, t: Tx): bool = all {
-      val txs = Set(t)
+    action doClientThenAdd(p: Process, txs: Set[Tx]): bool = all {
       all {
-        require(isValid(ledger, p, t)),
-        ledger' = ledger,
-        mempool' = mempool.add(p, txs),
-        hmempool' = hmempool.set(p, hmempool.get(p).union(txs))
+        require(_state.mayRcvFromClientAt(p, txs)),
+	      _state' = _state.add(p, txs)        
       }
     }
-
-    action doGossipThenUpdate(p: Process, q: Process): bool = all {
-      val txs = mempool.poolOf(p)
-      val nmempool = mempool.add(q, txs).update(q, ledger)
-      all {
-        require(p != q and txs.size()>0),
-        ledger' = ledger,
-        mempool' = nmempool,
-        hmempool' = hmempool.set(q, hmempool.get(q).union(txs))
-      }
-   }
 
     action doSubmit(p: Process): bool = all {
-      val txs = reap(mempool, p, 1)
+      val txs = reap(_state, p, 1)
       all {
-        require(txs.forall(t => ledger.isValid(p, t)) and ledger.maySubmit(p, txs)),
-        ledger' = ledger.submit(p, txs),
-      	mempool' = mempool,
-        hmempool' = hmempool
+        require(_state.maySubmitToLedger(p, txs)),
+        _state' = {ledger: _state.ledger.submit(p, txs), ..._state}
       }
     }
 
     action doCommitThenUpdate(p: Process): bool = all {
-      val nledger = if (ledger.mayCommit(p)) { ledger.commit(p) } else { ledger }	
-      val nmempool = mempool.update(p, nledger)
       all {
-        require(ledger.mayCommit(p)),
-        ledger' = nledger,
-        mempool' = nmempool,
-        hmempool' = hmempool
+        require(_state.ledger.mayCommit(p)),
+	      _state' = _state.commitThenUpdate(p)
       }
     }
+
+    action doGossipThenAdd(p: Process, q: Process): bool = all {
+      val txs = _state.txsOf(p) // all txs at once
+      all {
+        require(_state.mayRcvFromProcessAt(p, q, txs)),
+	       _state' = _state.add(p, txs)
+      }
+   }
 
     action step: bool = {
       nondet p = oneOf(PROCESSES)
       nondet q = oneOf(PROCESSES)
-      nondet t = oneOf(TXS)
+      nondet txs = Set(oneOf(TXS)) // one at a time
       any {
-        doClient(p,t),
+        doClientThenAdd(p,txs),
         doSubmit(p),
         doCommitThenUpdate(p),
-        doGossipThenUpdate(p,q)
+        doGossipThenAdd(p,q)
       }	
     }
 
-    // 5. invariants
+    //// invariants
     
     // INV1. the mempool is used as an input for the ledger
     val inv1 = {
-      PROCESSES.forall(p => ledger.getSubmittedFor(p).subseteq(hmempool.get(p)))
+      PROCESSES.forall(p => _state.ledger.getSubmittedFor(p).subseteq(_state.hmempool.get(p)))
     }
 
     // INV2. committed transactions are not in the mempool
     val inv2 = {
-      PROCESSES.forall(p => 0.to(ledger.heightOf(p)-1).forall(i =>  ledger.entry(p, i).intersect(mempool.poolOf(p)).size()==0))
+      PROCESSES.forall(p => 0.to(_state.ledger.heightOf(p)-1).forall(i =>  _state.ledger.entry(p, i).intersect(_state.txsOf(p)).size()==0))
     }
 
     // INV3. every transaction in the mempool is valid
     val inv3 = {
-      PROCESSES.forall(p => mempool.poolOf(p).forall(t => ledger.isValid(p, t)))
+      PROCESSES.forall(p => _state.txsOf(p).forall(t => _state.ledger.isValid(p, t)))
     }
     
     // INV4. every transaction that appears in the mempool is eventually committed or forever invalid
@@ -164,10 +168,10 @@ module Mempool {
     // }
     // FIXME. cannot be verified yet
 
-    // Instead, we use the (weaker) invariant below
-    // INV4b. every transaction in hmempool is always committed or if valid then still in the mempool
-     def inv4() = {
-       PROCESSES.forall(p => hmempool.get(p).forall(tx => ledger.isCommittedFor(p, tx) or not(ledger.isValid(p, tx)) or mempool.poolOf(p).contains(tx)))
+    // Instead, we use the (simpler) invariant below
+    // INV4b. every transaction in hmempool is always committed or if valid still in the mempool
+     val inv4() = {
+       PROCESSES.forall(p => _state.hmempool.get(p).forall(tx => _state.ledger.isCommittedFor(p, tx) or not(_state.ledger.isValid(p, tx)) or _state.txsOf(p).contains(tx)))
      }
 
     val allInv = and {
@@ -175,15 +179,15 @@ module Mempool {
       inv2,
       inv3,
       inv4
-   }
+    }
 
-    // 6. tests
+    //// tests
 
     run moveHeightOnceTest = {
       nondet p = oneOf(PROCESSES)
-      nondet t = oneOf(TXS)
+      nondet txs = Set(oneOf(TXS))
       init
-      .then(doClient(p,t))
+      .then(doClientThenAdd(p,txs))
       .then(doSubmit(p))
       .then(doCommitThenUpdate(p))
     }

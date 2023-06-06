@@ -4,6 +4,6 @@ module System{
     type Tx = str
     type Block = Set[Tx]
 
-    pure val PROCESSES=Set("alice", "bob")
-    pure val TXS=Set("T0", "T1")
+    pure val PROCESSES=Set("alice", "bob", "charlie")
+    pure val TXS=Set("T0", "T1", "T2")
 }

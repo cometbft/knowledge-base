@@ -16,7 +16,7 @@ module Consensus{
       decided: P.mapBy(p => Set())
     }
 
-    // 1. helpers
+    //// helpers
 
     pure def processes(state: ConsensusState): Set[Process] = {
       state.proposed.keys()
@@ -70,7 +70,7 @@ module Consensus{
       }
     }
 
-    // 2. preconditions
+    //// preconditions
 
     pure def mayPropose(state: ConsensusState, p: Process, txs: Set[Tx]): bool = {
       state.processes().contains(p) and not(state.hasProposed(p)) and txs.size() != 0
@@ -80,7 +80,7 @@ module Consensus{
       processes(state).contains(p) and size(state.getProposed()) > 0 and not(state.hasDecided(p))
     }
 
-    // 3. transitions
+    //// transitions
 
     pure def propose(state: ConsensusState, p: Process, txs: Set[Tx]): ConsensusState = {
       val newProposed = state.proposed.set(p, txs)
@@ -96,7 +96,7 @@ module Consensus{
       {decided: newDecided, ...state}
     }
 
-    // 4. state machine
+    //// state machine
 
     var _consensus: ConsensusState
 

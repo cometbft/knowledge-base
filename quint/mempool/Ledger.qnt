@@ -18,7 +18,7 @@ module Ledger{
       log: List(newConsensus(P))
     }
 
-    // 1. helpers
+    //// helpers
 
     // index of the first null entry
     pure def height(state: LedgerState): int = {
@@ -57,7 +57,7 @@ module Ledger{
       if (state.heightOf(p)==0) false else 0.to(state.heightOf(p)-1).exists(h => state.log[h].isDecided(t))
     }
 
-    // 2. preconditions
+    //// preconditions
 
     pure def maySubmit(state: LedgerState, p: Process, txs: Set[Tx]): bool = {
       state.log[state.heightOf(p)].mayPropose(p, txs)
@@ -67,7 +67,7 @@ module Ledger{
       state.log[state.heightOf(p)].mayDecide(p)
     }
 
-    // 3. transitions
+    //// transitions
 
     pure def submit(state: LedgerState, p: Process, txs: Set[Tx]): LedgerState = {
       val currentConsensus = state.log[heightOf(state,p)]
@@ -85,7 +85,7 @@ module Ledger{
       {log: nextLog.replaceAt(heightOf(state,p), currentConsensus.decide(p)), ...state}
     }
 
-    // 4. state machine
+    //// state machine
 
     var _ledger: LedgerState
 
@@ -115,7 +115,7 @@ module Ledger{
       ledgerDoCommit
     }
 
-    // 5. invariants
+    //// invariants
 
     // Validity: every non-null entry is submitted.
     pure def ledgerValidityInv(state: LedgerState): bool = {
@@ -143,7 +143,7 @@ module Ledger{
       }
     }
 
-    // 6. tests
+    //// tests
     
     run submitTwiceErrorTest = {
       nondet p = oneOf(PROCESSES)
