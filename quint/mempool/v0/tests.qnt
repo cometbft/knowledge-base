@@ -1,3 +1,4 @@
+// -*- mode: Bluespec; -*-
 module tests {
     import base.* from "./base"
     import basicSpells.* from "./basicSpells"
