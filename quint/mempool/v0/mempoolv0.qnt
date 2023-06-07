@@ -325,7 +325,7 @@ module mempoolv0 {
         node.setStep("UpdateAsProposer", Map("node" -> node)),
         val txValidResults: Tx -> bool = txs.mapBy(tx => tx.isValidAt(nextBlockHeight))
         node.Update(nextBlockHeight, txs, txValidResults),
-        Chain::addNewBlock(txs),
+        Chain::addNewBlock(txs.filter(tx => tx.isValidAt(nextBlockHeight))),
     }
 
     // This node is the proposer: create the next block with txs from the mempool.
@@ -344,7 +344,7 @@ module mempoolv0 {
     /* Receive a Txs message from a peer, and calls CheckTx on each Tx. */
     // [Reactor.Receive]: https://github.com/CometBFT/cometbft/blob/111d252d75a4839341ff461d4e0cf152ca2cc13d/mempool/reactor.go#L93
     action P2P_ReceiveTxs(node) = all {
-        node.setStep("P2P_ReceiveTxs", Map("node" -> node)),
+        node.setStep("P2P_ReceiveTxs", Map()),
         require(node.Network::incomingMsgs().nonEmpty()),
         nondet msg = oneOf(node.Network::incomingMsgs())
         all {
@@ -359,7 +359,7 @@ module mempoolv0 {
      * each of its peers. */
     //-- __subaction__: this action is not part of the next-state relation
     action P2P_SendTx_(node: NodeId, peer: NodeId): bool = all {
-        node.setStep("P2P_SendTx", Map("node" -> node, "peer" -> peer)),
+        node.setStep("P2P_SendTx", Map("peer" -> peer)),
         require(not(node.mempoolIsEmpty())),
         nondet tx = oneOf(node.mempoolTxs())
         val msg = { tag: "Txs", senderId: node, tx: tx }
@@ -442,24 +442,24 @@ module mempoolv0 {
 
     /* There may be action in other nodes too. */
     /* In case we want that other nodes other than the ones defined here generate blocks. */
-    action ChainNext = 
-        val notCommittedTxs = Txs.exclude(Chain::allTxsInChain)
-        all {
-            require(notCommittedTxs.nonEmpty()),
-            nondet txs = oneOf(notCommittedTxs.powerset())
-            all {
-                require(txs.forall(tx => isValidAt(tx, Chain::latestHeight + 1))),
-                Chain::addNewBlock(txs),
-                setStep(noNode, "ChainNext", txs.mapBy(x => x)),
-                setError(noNode, noError),
-                mempool' = mempool, 
-                mempoolHeight' = mempoolHeight, 
-                cache' = cache, 
-                History::unchanged,
-                ABCI::unchanged,
-                Network::unchanged,
-            }
-        }
+    // action ChainNext = 
+    //     val notCommittedTxs = Txs.exclude(Chain::allTxsInChain)
+    //     all {
+    //         require(notCommittedTxs.nonEmpty()),
+    //         nondet txs = oneOf(notCommittedTxs.powerset())
+    //         all {
+    //             require(txs.forall(tx => isValidAt(tx, Chain::latestHeight + 1))),
+    //             Chain::addNewBlock(txs),
+    //             setStep(noNode, "ChainNext", txs.mapBy(x => x)),
+    //             setError(noNode, noError),
+    //             mempool' = mempool, 
+    //             mempoolHeight' = mempoolHeight, 
+    //             cache' = cache, 
+    //             History::unchanged,
+    //             ABCI::unchanged,
+    //             Network::unchanged,
+    //         }
+    //     }
     
     // action step = any { NodeNext, ChainNext }
     action step = NodeNext
