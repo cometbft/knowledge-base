@@ -1,6 +1,6 @@
 # Mempool implementation (v0)
 
-This document describes the implementation of the mempool in CometBFT v0.38.x.
+This document describes the implementation of the mempool in CometBFT v0.38.0-rc1.
 This implementation, called v0, is simply a queue of transactions with a cache
 over a basic push-based gossip protocol.
 
@@ -14,7 +14,7 @@ over a basic push-based gossip protocol.
     
     - A client sends one transaction via broadcast_tx_* RPC endpoints. 
         [[`rpc.core.mempool.broadcast_tx_*`][broadcast_tx_*]]
-        <!-- [spec:CheckTxRPC] -->
+        <!-- [spec:CheckTxViaRPC] -->
     
     - A peer sends a list of transactions via the P2P layer.
         [[`mempool.Reactor.Receive`][Receive]]
@@ -133,26 +133,26 @@ over a basic push-based gossip protocol.
 
 - [Peer.Get]
 
-[broadcast_tx_*]: https://github.com/cometbft/cometbft/blob/v0.38.x/rpc/core/mempool.go#L22-L144
-[unconfirmed_txs]: https://github.com/cometbft/cometbft/blob/v0.38.x/rpc/core/mempool.go#L149
+[broadcast_tx_*]: https://github.com/cometbft/cometbft/blob/v0.38.0-rc1/rpc/core/mempool.go#L22-L144
+[unconfirmed_txs]: https://github.com/cometbft/cometbft/blob/v0.38.0-rc1/rpc/core/mempool.go#L149
 
-[Receive]: https://github.com/cometbft/cometbft/blob/v0.38.x/mempool/reactor.go#L93
-[broadcastTxRoutine]: https://github.com/cometbft/cometbft/blob/v0.38.x/mempool/reactor.go#L132
+[Receive]: https://github.com/cometbft/cometbft/blob/v0.38.0-rc1/mempool/reactor.go#L93
+[broadcastTxRoutine]: https://github.com/cometbft/cometbft/blob/v0.38.0-rc1/mempool/reactor.go#L132
 
-[FlushAppConn]: https://github.com/cometbft/cometbft/blob/v0.38.x/mempool/clist_mempool.go#L153
-[txs-loop]: https://github.com/cometbft/cometbft/blob/v0.38.x/mempool/clist_mempool.go#L176-L192
-[CheckTx]: https://github.com/cometbft/cometbft/blob/v0.38.x/mempool/clist_mempool.go#L202
-[resCbFirstTime]: https://github.com/cometbft/cometbft/blob/v0.38.x/mempool/clist_mempool.go#L369
-[resCbRecheck]: https://github.com/cometbft/cometbft/blob/v0.38.x/mempool/clist_mempool.go#L432
-[notifyTxsAvailable]: https://github.com/cometbft/cometbft/blob/v0.38.x/mempool/clist_mempool.go#L504
-[Update]: https://github.com/cometbft/cometbft/blob/v0.38.x/mempool/clist_mempool.go#L577
-[recheckTxs]: https://github.com/cometbft/cometbft/blob/v0.38.x/mempool/clist_mempool.go#L641
+[FlushAppConn]: https://github.com/cometbft/cometbft/blob/v0.38.0-rc1/mempool/clist_mempool.go#L178
+[txs-loop]: https://github.com/cometbft/cometbft/blob/v0.38.0-rc1/mempool/clist_mempool.go#L198-L209
+[CheckTx]: https://github.com/cometbft/cometbft/blob/v0.38.0-rc1/mempool/clist_mempool.go#L219
+[resCbFirstTime]: https://github.com/cometbft/cometbft/blob/v0.38.0-rc1/mempool/clist_mempool.go#L377
+[resCbRecheck]: https://github.com/cometbft/cometbft/blob/v0.38.0-rc1/mempool/clist_mempool.go#L439
+[notifyTxsAvailable]: https://github.com/cometbft/cometbft/blob/v0.38.0-rc1/mempool/clist_mempool.go#L513
+[Update]: https://github.com/cometbft/cometbft/blob/v0.38.0-rc1/mempool/clist_mempool.go#L586
+[recheckTxs]: https://github.com/cometbft/cometbft/blob/v0.38.0-rc1/mempool/clist_mempool.go#L650
 
-[CreateProposalBlock]: https://github.com/cometbft/cometbft/blob/v0.38.x/state/execution.go#L101
-[Commit]: https://github.com/cometbft/cometbft/blob/v0.38.x/state/execution.go#L351
-[PeerState]: https://github.com/cometbft/cometbft/blob/v0.38.x/consensus/reactor.go#L1021
+[CreateProposalBlock]: https://github.com/cometbft/cometbft/blob/v0.38.0-rc1/state/execution.go#L101
+[Commit]: https://github.com/cometbft/cometbft/blob/v0.38.0-rc1/state/execution.go#L351
+[PeerState]: https://github.com/cometbft/cometbft/blob/v0.38.0-rc1/consensus/reactor.go#L1021
 
-[Peer.Get]: https://github.com/CometBFT/cometbft/blob/v0.38.x/p2p/peer.go#L44
+[Peer.Get]: https://github.com/CometBFT/cometbft/blob/v0.38.0-rc1/p2p/peer.go#L44
 
 ## Notes
 
