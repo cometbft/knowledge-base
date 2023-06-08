@@ -105,25 +105,30 @@ To this end, we first provide a (brief) definition of what is a ledger, that is 
 At a process $p$, we shall write $p.var$ the local variable $var$ at $p$.
 
 **Ledger.**
-We use the standard definition of (BFT) SMR, where each process $p$ has a ledger, written $p.ledger$.
+We use the standard definition of (BFT) SMR in the context of blockchain, where each process $p$ has a ledger, written $p.ledger$.
 At process $p$, the $i$-th entry of the ledger is denoted $p.ledger[i]$.
 This entry contains either a null value ($\bot$), or a set of transactions, aka., a block.
-The height of the ledger at $p$ is the index of the first null entry.
+The height of the ledger at $p$ is the index of the first null entry; denoted $p.height$.
 Operation $submit(txs, i)$ attempts to write the set of transactions $txs$ to the $i$-th entry of the ledger.
-As standard, the ledger ensures that there is no gap between two entries at each process,
-that is  $\forall i. \forall p. p.ledger[i] \neq \bot \implies (i=0 \vee p.ledger[i-1] \neq \bot)$.
-It also makes sure that no two correct processes have different ledger entries (agreement);
-formally: $\forall i. \forall p,q \in Correct. (p.ledger[i] = \bot) \vee (q.ledger[i] = \bot) \vee (p.ledger[i] = q.ledger[i])$.
-Finally, the ledger requires that if some transaction appears at an index $i$, then a process submitted it at that index (validity).
-All the transactions in the non-null entries of the ledger are denoted $p.committed$;
-formally $p.committed = \\{ tx : \exists j. tx \in p.ledger[j] \\}$.
-The (history) variable $p.submitted$ holds all the transactions submitted so far by $p$.
+The (history) variable $p.submitted[i]$ holds all the transactions (if any) submitted by $p$.
+By extension, $p.submitted$ are all the transaction submitted by $p$.
+A transaction is committed when it appears in some entries of the ledger.
+We write $p.committed$ the committed transactions at $p$.
+
+As standard, the ledger ensures that:  
+* _(Gap-freedom)_ There is no gap between two entries at a correct process:  
+$\forall i. \forall p \in Correct. \square(p.ledger[i] \neq \bot \implies (i=0 \vee p.ledger[i-1] \neq \bot))$;  
+* _(Agreement)_ No two correct processes have different ledger entries; formally:  
+$\forall i. \forall p,q \in Correct. \square((p.ledger[i] = \bot) \vee (q.ledger[i] = \bot) \vee (p.ledger[i] = q.ledger[i]))$;  
+* _(Validity)_ If some transaction appears at an index $i$ at a correct process, then a process submitted it at that index:  
+$\forall p \in Correct. \forall i. \square(tx \in p.ledger[i] \implies tx \in \bigcup_q q.submitted[i]$).
+* _(Termination)_ If a correct process submits a block at its current height, eventually its height get incremented:  
+$\forall p \in Correct. \square((h=p.height \wedge p.submitted[h] \neq \varnothing) \implies \lozenge(p.height>h))$  
 
 **Mempool.**
 A mempool is a replicated set of transactions.
 At a process $p$, we write it $p.mempool$.
 We also define $p.hmempool$, the (history) variable that tracks all the transactions ever added to the mempool by process $p$.
-
 Below, we list the invariants of the mempool (at a correct process).
 
 The mempool is used as an input for the ledger:  
@@ -142,6 +147,12 @@ Finally, we require some progress from the mempool.
 Namely, if a transaction appears at a correct process then eventually it is committed or forever invalid.  
 **INV4** $\forall tx. \forall p \in Correct. \square(tx \in p.mempool \implies \lozenge\square(tx \in p.committed \vee \neg p.ledger.valid(tx)))$
 
+The above invariant ensures that if a transaction enters the mempool, then it eventually leaves it at all the correct processes.
+It requires from the application that the validity of a transaction converges toward some value.
+That is, in every run, there is a height after which $valid(tx)$ always returns the same value.
+This happens in [Ethereum](https://github.com/ethereum/go-ethereum/blob/5c51ef8527c47268628fe9be61522816a7f1b395/light/txpool.go#L401) as a transaction is always valid until a transaction from the same address executes with the same or higher nonce.
+A simpler way to satisfy this requirement is by having $valid(tx)$ deterministic and stateless (e.g., a syntactic check).
+
 **Practical considerations.**
 In practice, as it requires to traverse the whole ledger, INV2 is too expensive.
 Instead, we would like to maintain this only over the last $\alpha$ committed transactions, for some parameter $\alpha$.
@@ -158,9 +169,10 @@ Given some transaction $tx$, variable $p.valid[tx]$ tracks the number of times t
 Invariant INV3 is replaced with:  
 **INV3a.** $\forall tx. \forall p \in Correct. \square(tx \in p.mempool \implies p.valid[tx] \in [1, \beta])$
 
+
 ## Implementation in CometBFT (as of v0.38.0-alpha.2)
 
-The mempool is implemented in clist_mempool.go, in the `CListMempool` data type.
+The mempool is implemented in `clist_mempool.go`, in the `CListMempool` data type.
 `CListMempool` uses a single variable for the two mechanisms covered in the previous section.
 Below, we present this approach in detail then establish its correctness.
 
@@ -183,14 +195,15 @@ $tx$ is added to the cache at time $t$ (in short, @t) if
 
 $tx$ is removed from the cache @t if  
 (3) $tx$ was received @t'<t, re-checked and invalid t'<@t''<t (`resCbRecheck`, [l477](https://github.com/cometbft/cometbft/blob/1f524d12996204f8fd9d41aa5aca215f80f06f5e/mempool/clist_mempool.go#L4747)), or  
-(4) $tx$ is ejected from the cache as it is the last transaction wrt. cache and a new transaction is added.
+(4) $tx$ is ejected from the cache as it is the last transaction wrt. cache and a new transaction is added, or  
+(5) $tx$ is committed and invalid @t'<t (`update`, [l598](https://github.com/cometbft/cometbft/blob/1f524d12996204f8fd9d41aa5aca215f80f06f5e/mempool/clist_mempool.go#L601)).
 
 $tx$ is added to the mempool @t if  
-(5) $tx$ was received and added to the cache @t'<t, and was valid t'<@t"<t  (`addTx` after `recvCbFirstTime`, [l318](https://github.com/cometbft/cometbft/blob/1f524d12996204f8fd9d41aa5aca215f80f06f5e/mempool/clist_mempool.go#L318)).
+(6) $tx$ was received and added to the cache @t'<t, and was valid t'<@t"<t  (`addTx` after `recvCbFirstTime`, [l318](https://github.com/cometbft/cometbft/blob/1f524d12996204f8fd9d41aa5aca215f80f06f5e/mempool/clist_mempool.go#L318)).
 
 $tx$ is removed from the mempool @t if  
-(6) $tx$ is committed @t (`RemoveTx` after `removeTxByKey` after `update`, [l614](https://github.com/cometbft/cometbft/blob/1f524d12996204f8fd9d41aa5aca215f80f06f5e/mempool/clist_mempool.go#L614)), or  
-(7) $tx$ is re-checked and invalid @t'<t (`removeTx` after `resCbRecheck`, [l474](https://github.com/cometbft/cometbft/blob/1f524d12996204f8fd9d41aa5aca215f80f06f5e/mempool/clist_mempool.go#L474)).
+(7) $tx$ is committed @t (`RemoveTx` after `removeTxByKey` after `update`, [l614](https://github.com/cometbft/cometbft/blob/1f524d12996204f8fd9d41aa5aca215f80f06f5e/mempool/clist_mempool.go#L614)), or  
+(8) $tx$ is re-checked and invalid @t'<t (`removeTx` after `resCbRecheck`, [l474](https://github.com/cometbft/cometbft/blob/1f524d12996204f8fd9d41aa5aca215f80f06f5e/mempool/clist_mempool.go#L474)).
 
 In addition, following the logic of CometBFT,  
 - check and re-check operations are asynchronous,
@@ -199,17 +212,17 @@ In addition, following the logic of CometBFT,
 
 **Correctness**
 We now establish that the above algorithm implements the mempool abstraction.
-For invariants INV2a and INV3a, we show that there exist such an $\alpha$ and $\beta$, but we do not look at characterizing them precisely.
+For invariants INV2a and INV3a, we show that **there exist** such an $\alpha$ and $\beta$, but we do not look at characterizing them precisely.
 Regarding INV4, we shall assume that step (1) occurs infinitely often and not once upon the reception of the transaction.
 This models that a CometBFT client may re-submit a failed transaction forever until it succeeds (if it does).
 
 The refinement mapping from `CListMempool` to the mempool abstraction is as follows:
 Step (1) increments $p.valid[tx]$, which is initially set to 0.
-Conversely, step (3) resets $p.valid[tx]$ to 0.
-Transaction $tx$ is added to $p.lcommitted$ when step (2) occurs.
+Conversely, steps (3) and (5) reset $p.valid[tx]$ to 0.
+Transaction $tx$ is added to $p.lcommitted$ when step (2).
 It is removed when (4) takes place.
-Step (5) adds the transaction to the mempool.
-The transaction is removed from the mempool upon (6) and (7).
+Step (6) adds the transaction to the mempool.
+The transaction is removed from the mempool upon (7) and (8).
 
 Consider some correct process $p$.
 Below, we show in order that all the invariants of the mempool are maintained at $p$:  
@@ -219,31 +232,41 @@ Clear from the code base, as the consensus input corresponds to a call to `Execu
 
 - INV2a.
 If $tx$ is in $p.lcommitted$, it was added due to step (2).
-This step occurs only if the transaction was committed at some (previous or current) height, as required.
+This step occurs only if the transaction was committed at some height.
+Furthermore, when this happens step (7) is taken.
+It follows, that the transaction is removed from the mempool, as required.
 
 - INV3a.
-Assume $p.valid[tx]$ is larger than $0$ at a given height $h$.
+Consider some height $h$ for which $tx$ is in the mempool and $p.valid[tx]>0$.
 For any transaction $tx$, this counter is set to $0$ initially.
 Hence, $p.valid[tx]$ was incremented at some height $h' \leq h$.
-Consider the point in time, where p moves to height $h$. 
-If $p.valid[tx]$ equals 0 at that point in time, then it was incremented at height h, as required.
-Otherwise, the transaction is rechecked at the current (new) height h.
-Because $p.valid[tx]$ is not reset, it follows that the application considers it valid at h.
+Consider the point in time $t'$, where p moves to height $h$.
+If $p.valid[tx]$ equals 0 at that time, then it was incremented at height h.
+From (6), it is necessarily valid at height h, as requied.
+Otherwise, the transaction is rechecked at the current (new) height h with step (8).
+Because $p.valid[tx]$ is not reset, it follows that the application considers it valid at h 
 
 - INV4.
 Consider that a transaction $tx$ enters the mempool at $p$.
-If $tx$ leaves the mempool, step 6 or 7 happens.
+If $tx$ leaves the mempool, step (7) or (8) happens.
 In the former case, $tx$ is committed as required.
 In the latter, $tx$ is re-checked and invalid at some height $h$.
-Re-checking a transaction happens only once per height, say at time $t$ for $tx$ and height $h$.
-When this happens at time $t$ (line 474), the transaction is also removed from the cache (line 477).
-By assumption, step (1) is eventually re-executed for transaction $tx$ after time t.
-Because $tx$ is no more in the cache, it is added again.
-Hence, $tx$ eventually reaches again the cache after time $t$.
-We can thus repeat the above reasoning.
-Assume that transaction $tx$ is not forever invalid at process $p$.
-This means that there exists a series of heights at which transaction $tx$ is valid.
-Thanks to the gossip layer, this also hold eventually at all the correct processes.
-As a consequence, eventually $tx$ is submitted at some height at which it is valid and committed there.
+Re-checking a transaction happens only once per height, say at time $t$ for transaction $tx$ and height $h$.
+When this happens at time $t$ (line 474), the transaction is also removed from the cache (line 477) due to step (3).
+By assumption, step (1) is eventually re-executed for transaction $tx$ after time $t$.
+Because $tx$ is no more in the cache, it is added again after time $t$.
+Now, assume that transaction $tx$ is not invalid infinitely often at process $p$.
+Hencce after some time, it is always valid at $p$.
+Observe that this is also eventually the case at all the correct processes in the system.
+Name $t'$ the moment in time when this occurs.
+By assumption, there are only a bounded amount of transactions submitted in the system.
+After time $max(t,t')$, $tx$ is eventually submitted at some height at which it is valid and committed.
 
-
+*A remark.* 
+The reader might observe that in the above reasoning we do not use step (5).
+This comes from the fact that stricly speaking this step is not necessary for the mempool invariants to hold.
+One could consider a stronger variation of INV4 in which a transaction is eventually either 
+forever invalid,
+or at some height both valid and committed.
+This variation would necessitate step (5) to oust a committed yet invalid transaction from the cache.
+It remains unclear whether this stronger variation of INV4, and thus of the mempool abstraction, is of interest or not to the application.
