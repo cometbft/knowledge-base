@@ -10,7 +10,7 @@ module params {
         tx.in(Set("tx3", "tx4")) and h == 2,
     }
 
-    // network topology
+    // This map defines the network topology.
     val __Peers = Map(
         "n1" -> Set("n2"),
         "n2" -> Set("n1")
@@ -26,20 +26,18 @@ module params {
 module base {
     import params.*
 
-    // Nodes
     type NodeId = str
     val noNode: NodeId = "no-node"
     // const NodeIds: Set[NodeId]
     val NodeIds: Set[NodeId] = __NodeIds
 
-    // Transactions
     type Tx = str
-    // val invalidTx: Tx = "invalid-tx"
     // const Txs: Set[Tx]
     val Txs: Set[Tx] = __Txs
 
-    // Heights
     type Height = int
+
+    // A transaction is valid at a certain height.
     def isValidAt(tx: Tx, h: Height): bool = __isValidAt(tx, h)
 
     //--------------------------------------------------------------------------

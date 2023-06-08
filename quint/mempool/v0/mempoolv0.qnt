@@ -21,21 +21,27 @@ module mempoolv0 {
     //--------------------------------------------------------------------------
     // Spec parameters
     //--------------------------------------------------------------------------
-    val MempoolMaxSize: int = Params::__MempoolMaxSize
+    val MempoolMaxSize: int = 
+        Params::__MempoolMaxSize
     // assume(MempoolMaxSize > 0)
 
     type Config = { keepInvalidTxsInCache: bool }
-    val Configs: NodeId -> Config = Params::__Configs
+    val Configs: NodeId -> Config = 
+        Params::__Configs
 
     //--------------------------------------------------------------------------
     // Auxiliary variables
     //--------------------------------------------------------------------------
     type Step = str
+
+    // To keep track of the step (one of the actions defined in `step`) taken by
+    // a node.
     var _step: { node: NodeId, name: Step, args: str -> str }
 
     action setStep(node, s, args) =
         _step' = { node: node, name: s, args: args }
 
+    // To keep track of the error, if any, of the step taken by a node.
     var _error: { node: NodeId, error: Error }
 
     action setError(node, err) =
@@ -44,6 +50,8 @@ module mempoolv0 {
     //--------------------------------------------------------------------------
     // Mempool state
     //--------------------------------------------------------------------------
+    
+    // The data structure stored of the elements stored in the mempool.
     // [mempoolTx]: https://github.com/CometBFT/cometbft/blob/6498d67efdf0a539e3ca0dc3e4a5d7cb79878bb2/mempool/clist_mempool.go#L671
     type MempoolTx = { 
         tx: Tx, 
@@ -53,12 +61,17 @@ module mempoolv0 {
 
     val noMempoolTx = { tx: "", height: 0, senders: Set() }
 
+    // The main data structure in the mempool. 
+    // The actual implementation is a list (a queue), but we modelled it as a
+    // set, because for the moment we don't need to reason about the order of
+    // transactions.
     var mempool: NodeId -> Set[MempoolTx]
 
-    // The transactions received by a node.
+    // The transactions received by a node, to avoid handling repeated
+    // transactions.
     var cache: NodeId -> Set[Tx]
 
-    // The last block Update()'d to.
+    // The height of the last block to which the mempool was updated to.
     var mempoolHeight: NodeId -> Height
 
     def Mempool(nodeId) = mempool.get(nodeId)
@@ -82,9 +95,6 @@ module mempoolv0 {
     //--------------------------------------------------------------------------
     // Mempool auxiliary definitions
     //--------------------------------------------------------------------------
-    def mempoolIsEmpty(node) =
-        node.Mempool().isEmpty()
-
     def mempoolIsFull(node) =
         size(node.Mempool()) > MempoolMaxSize
 
@@ -141,7 +151,8 @@ module mempoolv0 {
         ABCI::init,
     }
     
-    /** Validate a transaction and add it to the mempool. */
+    // Validate an incoming transaction by sending an ABCI request to the
+    // application.
     // [CListMempool.CheckTx]: https://github.com/CometBFT/cometbft/blob/5a8bd742619c08e997e70bc2bbb74650d25a141a/mempool/clist_mempool.go#L202
     //-- __subaction__: this action is not part of the next-state relation
     action CheckTx(node: NodeId, tx: Tx, senderId: NodeId): bool = all {
@@ -150,27 +161,25 @@ module mempoolv0 {
             mempool' = mempool,
             cache' = cache,
             ABCI::unchanged,
+        } else if (tx.in(node.Cache())) all {
+            // Record new sender for the tx we've already seen.
+            // Note it's possible a tx is still in the cache but no longer in the mempool
+            // (eg. after committing a block, txs are removed from mempool but not cache),
+            // so we only record the sender for txs still in the mempool.
+            node.addSender(tx, senderId),
+            node.setError(TxInCacheError),
+            cache' = cache,
+            ABCI::unchanged,
         } else all {
-            if (tx.in(node.Cache())) all {
-        		// Record new sender for the tx we've already seen.
-                // Note it's possible a tx is still in the cache but no longer in the mempool
-                // (eg. after committing a block, txs are removed from mempool but not cache),
-                // so we only record the sender for txs still in the mempool.
-                node.addSender(tx, senderId),
-                node.setError(TxInCacheError),
-                cache' = cache,
-                ABCI::unchanged,
-            } else all {
-                node.addToCache(tx),
-                node.ABCI::sendRequestNewCheckTx(tx, senderId, node.MempoolHeight() + 1),
-                node.setError(noError),
-                mempool' = mempool,
-            }
+            node.addToCache(tx),
+            node.ABCI::sendRequestNewCheckTx(tx, senderId, node.MempoolHeight() + 1),
+            node.setError(noError),
+            mempool' = mempool,
         },
         mempoolHeight' = mempoolHeight,
     }
 
-    // Callback function to process a CheckTx response.
+    // Callback function to process a CheckTx response of type "New".
     // Note that tx and sender are arguments to CListMempool.resCbFirstTime.
     // [CListMempool.resCbFirstTime]: https://github.com/CometBFT/cometbft/blob/6498d67efdf0a539e3ca0dc3e4a5d7cb79878bb2/mempool/clist_mempool.go#L369
     action ReceiveCheckTxResponse(node) = all {
@@ -245,10 +254,10 @@ module mempoolv0 {
         Network::unchanged,
     }
 
-    // Callback function to process a CheckTx response, when rechecking.
+    // Callback function to process a CheckTx response with type "Recheck".
     // [CListMempool.resCbRecheck]: https://github.com/CometBFT/cometbft/blob/6498d67efdf0a539e3ca0dc3e4a5d7cb79878bb2/mempool/clist_mempool.go#L432
     action ReceiveRecheckTxResponse(node: NodeId): bool = all {
-        node.setStep("ReceiveRecheckTxResponse", Map("node" -> node)),
+        node.setStep("ReceiveRecheckTxResponse", Map()),
         require(node.ABCI::recheckTxRequests().nonEmpty()),
         nondet request = oneOf(node.ABCI::recheckTxRequests())
         val response = node.ABCI::responseFor(request)
@@ -272,7 +281,8 @@ module mempoolv0 {
     //--------------------------------------------------------------------------
     // RPC initiated actions
     //--------------------------------------------------------------------------
-    /* Receive a specific transaction from a client via RPC. */
+    
+    // Receive a given transaction from a client via RPC.
     // [Environment.BroadcastTxAsync]: https://github.com/CometBFT/cometbft/blob/111d252d75a4839341ff461d4e0cf152ca2cc13d/rpc/core/mempool.go#L22
     //-- __subaction__: this action is not part of the next-state relation
     action CheckTxRPC(node, tx) = all {
@@ -287,7 +297,7 @@ module mempoolv0 {
     action ReceiveTxViaRPC(node) = 
         nondet tx = oneOf(Txs)
         all {
-            // We don't want to repeat this step on the same transaction as the last time.
+            // This guard is for not repeating the same step on the same transaction as the last time.
             require(_step.name == "ReceiveTxViaRPC" and _step.node == node implies _step.args.get("tx") != tx),
             node.CheckTxRPC(tx),
         }
@@ -312,17 +322,19 @@ module mempoolv0 {
     action BlockExecutor_MempoolUpdate_nonProposer(node) = all {
         require(not(Chain::chainIsEmpty)),
         require(node.MempoolHeight() < Chain::latestHeight),
-        node.setStep("UpdateAsNonProposer", Map("node" -> node)),
         val nextBlockHeight = node.MempoolHeight() + 1
         val txs: Set[Tx] = Chain::getBlockAt(nextBlockHeight)
-        // All txs are valid because they are committed in the chain.
-        node.Update(nextBlockHeight, txs, txs.mapBy(_ => true)),
-        Chain::unchanged,
+        all {
+            node.setStep("UpdateAsNonProposer", txs.mapBy(tx => tx)),
+            // All txs are valid because they are committed in the chain.
+            node.Update(nextBlockHeight, txs, txs.mapBy(_ => true)),
+            Chain::unchanged,
+        },
     }
 
     //-- __subaction__: this action is not part of the next-state relation
     action BlockExecutor_MempoolUpdate_proposer_(node, txs, nextBlockHeight) = all {
-        node.setStep("UpdateAsProposer", Map("node" -> node)),
+        node.setStep("UpdateAsProposer", txs.mapBy(tx => tx)),
         val txValidResults: Tx -> bool = txs.mapBy(tx => tx.isValidAt(nextBlockHeight))
         node.Update(nextBlockHeight, txs, txValidResults),
         Chain::addNewBlock(txs.filter(tx => tx.isValidAt(nextBlockHeight))),
@@ -360,7 +372,7 @@ module mempoolv0 {
     //-- __subaction__: this action is not part of the next-state relation
     action P2P_SendTx_(node: NodeId, peer: NodeId): bool = all {
         node.setStep("P2P_SendTx", Map("peer" -> peer)),
-        require(not(node.mempoolIsEmpty())),
+        require(not(node.Mempool().isEmpty())),
         nondet tx = oneOf(node.mempoolTxs())
         val msg = { tag: "Txs", senderId: node, tx: tx }
         all {
@@ -388,7 +400,7 @@ module mempoolv0 {
     // [Reactor.broadcastTxRoutine]: https://github.com/CometBFT/cometbft/blob/5049f2cc6cf519554d6cd90bcca0abe39ce4c9df/mempool/reactor.go#L132
     action P2P_BroadcastTx(node: NodeId): bool = all {
         node.setStep("P2P_BroadcastTx", Map()),
-        require(not(node.mempoolIsEmpty())),
+        require(not(node.Mempool().isEmpty())),
         nondet tx = oneOf(node.mempoolTxs())
         val msg = { tag: "Txs", senderId: node, tx: tx }
         val peers = Network::Peers.get(node).exclude(node.sendersFor(tx))
@@ -511,13 +523,13 @@ module mempoolv0 {
     val notSameTx = not(SameTx)
 
     //--------------------------------------------------------------------------
-    val EmptyChain = 
-        Chain::chainIsEmpty
 
+    // a state in which all available transactions (Txs) are included in the chain
     val FullChain = 
         Chain::allTxsInChain == Txs
     val notFullChain = not(FullChain)
 
+    // a state in which all nodes are synced to height 2
     val AllNodesSynced =
         NodeIds.forall(node => node.MempoolHeight() == 2)
     val notAllNodesSynced = not(AllNodesSynced)

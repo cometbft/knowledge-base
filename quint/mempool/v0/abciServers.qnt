@@ -11,12 +11,10 @@ module abciServers {
     type ABCIRequests = { tag: str, tx: Tx }
     val ABCIRequestTags = Set("CheckTx", "RecheckTx")
     
-    // The server receives requests in a queue (a set actually) and responds
+    // The server receives requests in a queue (actually, a set) and responds
     // to a queue (a set) of responses. Each request maps to: the node id of the
     // sender, the height at which it was requested, and the response, if any.
     var requestResponses: NodeId -> (Msg::Request -> (NodeId, Height, Msg::Response))
-
-    val noResponse: Msg::Response = { tag: "", err: noError }
 
     //--------------------------------------------------------------------------
     // Auxiliary definitions
@@ -40,7 +38,8 @@ module abciServers {
     action init =
         requestResponses' = NodeIds.mapBy(_ => Map())
 
-    // For a "New" request we store the sender.
+    // The "New" request includes the sender and the height of mempool when it
+    // was requested.
     action sendRequestNewCheckTx(nodeId, tx, senderId, h) = 
         val req = { tag: "CheckTx", tx: tx, checkTxType: "New" }
         val err = if (req.tx.isValidAt(h)) noError else InvalidTxError
@@ -48,7 +47,8 @@ module abciServers {
         requestResponses' = requestResponses.mapPut(nodeId, 
             (rs) => rs.put(req, (senderId, h, resp)))
 
-    // For "Recheck" we send multiple requests at once.
+    // The "Recheck" request only includes the height. We process multiple
+    // requests at once.
     action sendRequestRecheckTxs(nodeId, txs, h) =
         val newRequests = txs.map(tx => { tag: "CheckTx", tx: tx, checkTxType: "Recheck" })
         requestResponses' = requestResponses.mapPut(nodeId, (rs) =>
@@ -57,6 +57,8 @@ module abciServers {
                 (noNode, h, { tag: req.tag, err: err }) 
             }))
 
+    // When a response is processed by the ABCI client, we no longer need so we
+    // remove it.
     action removeRequest(nodeId, request) =
         requestResponses' = requestResponses.mapPut(nodeId, (rs) => rs.mapRemove(request))
 

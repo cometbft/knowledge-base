@@ -16,6 +16,7 @@ module tests {
     val tx2 = "tx2"
     val tx3 = "tx3"
 
+    // helper action for checking a condition in a run
     action assert_(__cond: bool): bool = all {
         __cond,
         mempool' = mempool, 
@@ -35,32 +36,39 @@ module tests {
     //--------------------------------------------------------------------------
     // Tests
     //--------------------------------------------------------------------------
+    // receive a valid tx via RPC, send a CheckTx request, and handle the response
     run test1 = init
         .then(node1.CheckTxRPC(tx1))
         .then(node1.ReceiveCheckTxResponse())
         .then(assert_(node1.inMempool(tx1) and tx1.in(node1.Cache())))
     
+    // the transaction was added to a block, so now update the mempool
     run test2 = test1
         .then(all{ node1.Update(1, Set(tx1), Map(tx1 -> true)), Chain::unchanged, _step' = _step })
         .then(assert_(not(node1.inMempool(tx1)) and tx1.in(node1.Cache())))
 
+    // propagate the transaction to a peer (without receiving the re-CheckTx response)
     run test3 = test1
         .then(node1.P2P_SendTx_(node2))
         .then(node2.P2P_ReceiveTxs())
         .then(assert_(not(node2.inMempool(tx1)) and tx1.in(node2.Cache())))
 
+    // the peer receives the transaction and sends a CheckTx request
     run test4 = test3
         .then(node2.ReceiveCheckTxResponse())
         .then(assert_(node2.inMempool(tx1) and tx1.in(node2.Cache())))
 
+    // the peer updates its chain and updates the mempool
     run test5 = test4
         .then(all { node2.Update(1, Set(tx1), Map(tx1 -> tx1.isValidAt(1))), Chain::unchanged, _step' = _step })
         .then(assert_(not(node2.inMempool(tx1)) and tx1.in(node2.Cache())))
 
+    // receive a invalid tx via RPC, send a CheckTx request, and handle the response
     run testInvalid1 = init
         .then(assert_(not(tx3.isValidAt(0))))
         .then(node1.CheckTxRPC(tx3))
-        .then(ReceiveCheckTxResponse(node1))
+        .then(node1.ReceiveCheckTxResponse())
+        .then(assert_(not(node1.inMempool(tx3)) and not(tx3.in(node1.Cache()))))
 
     //--------------------------------------------------------------------------
     // an initial state with a non-empty chain

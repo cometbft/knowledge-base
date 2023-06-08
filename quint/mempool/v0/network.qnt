@@ -1,4 +1,5 @@
 // -*- mode: Bluespec; -*-
+// The messages in the network of peers
 module network {
     import basicSpells.* from "./basicSpells"
     import base.* from "./base"
@@ -9,8 +10,11 @@ module network {
 
     //--------------------------------------------------------------------------
     // Network state
+    //--------------------------------------------------------------------------
     type TxsMsg = { tag: str, senderId: NodeId, tx: Tx }
-    var msgs: NodeId -> Set[TxsMsg] // map from receiver to messages to process
+    
+    // For each node, the messages sent by other nodes and still to be processed.
+    var msgs: NodeId -> Set[TxsMsg]
 
     def incomingMsgs(nodeId) =
         msgs.get(nodeId)

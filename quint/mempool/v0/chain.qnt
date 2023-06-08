@@ -2,7 +2,12 @@
 module chain {
     import base.* from "./base"
 
-    type Chain = List[Set[Tx]]
+    // We model a block as a set of transactions for keeping things simple. In
+    // case we need to reason about the order of transactions, we could use a list.
+    type Block = Set[Tx]
+
+    // A chain is a list of blocks.
+    type Chain = List[Block]
     var chain: Chain
 
     val latestHeight = 
@@ -35,7 +40,7 @@ module chain {
         else
             ch.slice(0, h).listToSet().flatten()
 
-    // The transaction `tx` is committed to the chain, at most at height `h`.
+    // True iff transaction `tx` is committed to the chain, at most at height `h`.
     def committedUpTo(tx: Tx, h: Height): bool = 
         tx.in(chain.txsUpTo(h))
 
