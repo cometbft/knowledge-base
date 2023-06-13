@@ -342,13 +342,18 @@ module mempoolv0 {
         }
     }
 
+    // [ReapMaxBytesMaxGas]: https://github.com/cometbft/cometbft/blob/111d252d75a4839341ff461d4e0cf152ca2cc13d/mempool/clist_mempool.go#L519
+    def reapTxs(node) = 
+        // Note that block may be empty.
+        nondet txs = oneOf(node.mempoolTxs().powerset())
+        txs
+
     // This node is the proposer: create the next block with txs from the mempool.
     action BlockExecutor_MempoolUpdate_proposer(node) = all {
         require(node.mempoolTxs().nonEmpty()),
         require(node.MempoolHeight() == Chain::latestHeight),
         val nextBlockHeight = node.MempoolHeight() + 1
-        // Note that block may be empty.
-        nondet txs = oneOf(node.mempoolTxs().powerset())
+        val txs = node.reapTxs()
         BlockExecutor_MempoolUpdate_proposer_(node, txs, nextBlockHeight)
     }
 
