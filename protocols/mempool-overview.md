@@ -1,102 +1,80 @@
-** This (unfinished) document was used to collect a common understanding of the mempool. We will need to see how/whether this should be incorporated in the specification at some moment **
-
 # Mempool
 
-The mempool is a distributed pool of pending transactions.
-A pending transaction is a valid transaction that has been submitted by a
-client of the blockchain but has not yet been committed to the blockchain.
-The mempool is thus fed with client transactions,
-that a priori can be submitted to any node in the network.
-And it is consumed by the consensus protocol, more specifically by validator nodes,
-which retrieve from the mempool transactions to be included in proposed blocks.
+In this document, we define the notion of **mempool** and characterize its role in the **CometBFT** protocol.
+First, we provide an overview of what is a mempool, and relates it to other blockchains.
+Then, the interactions with the consensus and client application are detailed.
+A formalization of the mempool follows.
+We close this document with a proof that the current implementation of the mempool in CometBFT (as of v0.38.0-rc1) is correct.
 
-More concretely, every node participating in the mempool protocol maintains a
-local copy of the mempool, namely a list of pending transactions.
-Nodes that expose an interface to receive transactions from clients
-append the submitted transactions to their local copy of the mempool.
-These nodes are the entry point of the mempool protocol,
-and by extension of the consensus protocol.
-Nodes that play the role of validators in the consensus protocol,
-in their turn, retrieve from their local copy of the mempool
-pending transactions to be included in proposed blocks.
-Validator nodes are therefore the recipients of the transactions stored and
-transported by the mempool protocol.
+## Overview
 
-The goal of the mempool protocol is then to convey transactions
-from the nodes that act as entry points of the network
-to the nodes whose role is to order transactions.
+The mempool acts as an entry point to consensus.
+It permits to disseminate transactions from one node to another, for their eventual inclusion in the blockchain.
+To this end, the mempool maintains a replicated set, or _pool_, of transactions.
+Transactions in the mempool are consumed by consensus to create the next proposed block.
+The mempool is refreshed once a new block in the blockchain  is decided.
+
+A transaction can be received from a local client, or a remote disseminating process.
+Each transaction is subject to a test by the client application.
+This test verifies that the transaction is _valid_.
+Such a test provides some form of protection against byzantine agents, whether they be clients or other system nodes.
+It also serves to optimize the overall utility of the blockchain.
+Validity can be simply syntactical which is stateless, or a more complex verification that is state-dependent.
+If the transaction is valid, the local process further propagates it in the system using a gossip (or an anti-entropy) mechanism.
+
+_In other blockchains._
+The notion of mempool appears in all blockchains, but with varying definitions and/or implementations.
+For instance in Ethereum, the mempool contains two types of transactions: processable and pending ones.
+To be pending, a transactions must first succeed in a series of tests.
+Some of these tests are [syntactic](https://github.com/ethereum/go-ethereum/blob/281e8cd5abaac86ed3f37f98250ff147b3c9fe62/core/txpool/txpool.go#L581) ones (e.g., valid source address), while [others](https://github.com/ethereum/go-ethereum/blob/281e8cd5abaac86ed3f37f98250ff147b3c9fe62/core/txpool/txpool.go#L602) are state-dependent (e.g., enough gas, at most one pending transactions per address, etc).
+[Narwhal](https://arxiv.org/abs/2105.11827.pdf) is the mempool abstraction for the Tusk and [Bullshark](https://arxiv.org/pdf/2201.05677) protocols.
+It provides strong global guarantees.
+In particular, once a transaction is added to the mempool, it is guaranteed to be available at any later point in time.
 
 ## Interactions
 
-### RPC server
+In what follows, we present the interactions of the mempool with other parts of the CometBFT protocol.
+Some of the specificities of the current implementation (`CListMempool`) are also detailed.
+For further information about the current implementation, the reader may consult the overview [document](https://github.com/cometbft/knowledge-base/blob/main/protocols/mempool/v0/mempool-v0.md), as well as the quint [specification](https://github.com/cometbft/knowledge-base/pull/11/files).
 
-Clients submit transactions through the RPC endpoints offered by certain
-(public) nodes, which add the submitted transactions to the mempool.
+**RPC server**
+To add a new transaction to the mempool, a clients may submit it through an appropriate RPC endpoint.
+This endpoint is offered by some of the system nodes (but not necessarily all of them).
 
-### ABCI application
+**Gossip protocol** 
+Transactions can also be received from other nodes, through a gossiping mechanism.
 
-The mempool should only store and convey valid transactions.
-It is up to the ABCI application to define whether a transaction is valid.
+**ABCI application**
+As pointed above, the mempool should only store and disseminate  valid transactions.
+It is up to the ABCI (client) application to define whether a transaction is valid.
+Transactions received locally are sent to the application to be validated, through the `checkTx` method from the mempool ABCI connection.
+Such a check indicates with a flag whether it is the first time (or not) that the transaction is received.
+Transactions that are validated by the application are later added to the mempool.
+Transactions tagged as invalid are simply drooped.
+The validity of a transaction may depend on the state of the client application.
+In particular, some transactions that are valid in some state of the application may later become invalid.
+The state of the application is updated when consensus commits a block of transactions.
+When this happens, the transactions still in the mempool have to be validated again.
+We further detail this mechanism below.
 
-Transactions received by a node are sent to the application to be validated,
-through the CheckTx method from the mempool ABCI connection.
-This applies for both transactions received from a client and transactions
-received from a peer in the mempool protocol.
-Transactions that are validated by the application are appended to the local
-copy of the mempool.
-Transactions considered invalid by the application are drooped, therefore are
-not added to the local copy of the mempool.
+**Consensus**
+The consensus protocol consumes transactions stored in the mempool to build blocks to be proposed.
+To this end, consensus requests from the mempool a list of transactions which abide by certain limits (namely, total number of transactions included, or total size in bytes).
+In the current implementation, the mempool is a list of transactions.
+Such a call returns the longest prefix of the list that is matching the requirements.
+Notice that at this point the transactions returned to consensus are not removed from the mempool.
+This comes from the fact that the block is proposed but not decided yet.
 
-The validity of a transaction may depend on the state of the application.
-In particular, some transactions that were valid considering a given state of
-the application can become invalid when the state of the application is updated.
-The state of the application is updated when a committed block of transactions
-is delivered to the application for being executed.
-Thus, whenever a new block is committed, the list of pending transactions
-stored in the mempool is updated to exclude the executed transactions and
- sent to the application to be validated against the
-new state of the application.
-Transactions that have become invalid with the new state of application are
-then removed from the mempool.
-
-### Consensus: validators
-
-The consensus protocol consumes pending transactions stored in the mempool to
-build blocks to be proposed.
-More precisely, the consensus protocol requests to the mempool a list of
-pending transactions that respects certain limits, in terms of the number of
-transactions returned, their total size in bytes, and their required gas.
-The mempool then returns the longest prefix of its local list of pending
-transactions that respects the limits established by the consensus protocol.
-This means that the order with which the transactions are stored in the mempool
-is preserved when transactions are provided to the consensus protocol.
-
-> Notice that the transactions provided to the consensus protocol are not
-> removed from the mempool, as they are still pending transactions albeit being
-> included in a proposed block.
-
-As proposing blocks is a prerogative of nodes acting as validators,
-only validator nodes interact with the mempool in this way.
-
-### Consensus: all nodes
-
-The consensus protocol is responsible for committing blocks of transactions to 
-the blockchain.
-Once a block is committed to the blockchain, all transactions included in the
-block should be removed from the mempool, as they are no any longer pending.
-The consensus protocol thus, as part of the procedure to commit a block,
-informs the mempool the list of transactions included in the committed block.
-The mempool then removes from its local list of pending transactions the
-transactions that were included in the committed block, and therefore are no
-longer pending.
-This procedure precedes the re-validation of transactions against the new state
-of the application, which is part of this same procedure to commit a block.
-
-> **Note**    
-> Notice that a node can commit blocks to the blockchain through different
-> procedures, such as via the block sync protocol.
-> The above operation should be part of these other procedures, and should be
-> performed whenever a node commits a new block to the blockchain.
+Proposing a block is the prerogative of the nodes acting as validators.
+At all the nodes (validators or not), consensus is also responsible for committing blocks of transactions to the blockchain.
+Once a block is committed, all the transactions included in the block are removed from the mempool.
+This happens with an `update` call to the mempool.
+Before doing this call, consensus takes a `lock` on the mempool.
+It then `flush` the connection with the client application.
+Both operations aim at preventing any concurrent `checkTx` while the mempool is updated.
+At the end of `update`, all the transactions still in the mempool are re-validated against the new state of the client application.
+This procedure is executed asynchronously with a call to `recheckTxs`.
+Finally, consensus removes its lock on the mempool by issuing a call to `unlock`.
 
 ## Formalization
 
@@ -110,18 +88,18 @@ At process $p$, the $i$-th entry of the ledger is denoted $p.ledger[i]$.
 This entry contains either a null value ($\bot$), or a set of transactions, aka., a block.
 The height of the ledger at $p$ is the index of the first null entry; denoted $p.height$.
 Operation $submit(txs, i)$ attempts to write the set of transactions $txs$ to the $i$-th entry of the ledger.
-The (history) variable $p.submitted[i]$ holds all the transactions (if any) submitted by $p$.
+The (history) variable $p.submitted[i]$ holds all the transactions (if any) submitted by $p$ at height $i$.
 By extension, $p.submitted$ are all the transaction submitted by $p$.
-A transaction is committed when it appears in some entries of the ledger.
+A transaction is committed when it appears in one of the entries of the ledger.
 We write $p.committed$ the committed transactions at $p$.
 
 As standard, the ledger ensures that:  
 * _(Gap-freedom)_ There is no gap between two entries at a correct process:  
-$\forall i. \forall p \in Correct. \square(p.ledger[i] \neq \bot \implies (i=0 \vee p.ledger[i-1] \neq \bot))$;  
+$\forall i \in 	\mathbb{N}. \forall p \in Correct. \square(p.ledger[i] \neq \bot \implies (i=0 \vee p.ledger[i-1] \neq \bot))$;  
 * _(Agreement)_ No two correct processes have different ledger entries; formally:  
-$\forall i. \forall p,q \in Correct. \square((p.ledger[i] = \bot) \vee (q.ledger[i] = \bot) \vee (p.ledger[i] = q.ledger[i]))$;  
+$\forall i \in 	\mathbb{N}. \forall p,q \in Correct. \square((p.ledger[i] = \bot) \vee (q.ledger[i] = \bot) \vee (p.ledger[i] = q.ledger[i]))$;  
 * _(Validity)_ If some transaction appears at an index $i$ at a correct process, then a process submitted it at that index:  
-$\forall p \in Correct. \forall i. \square(tx \in p.ledger[i] \implies tx \in \bigcup_q q.submitted[i]$).
+$\forall p \in Correct. \exists q \in Processes. \forall i \in 	\mathbb{N}. \square(tx \in p.ledger[i] \implies tx \in \bigcup_q q.submitted[i]$).
 * _(Termination)_ If a correct process submits a block at its current height, eventually its height get incremented:  
 $\forall p \in Correct. \square((h=p.height \wedge p.submitted[h] \neq \varnothing) \implies \lozenge(p.height>h))$  
 
@@ -137,9 +115,10 @@ The mempool is used as an input for the ledger:
 Committed transactions are not in the mempool:  
 **INV2.** $\forall tx. \forall p \in Correct. \square(tx \in p.committed \implies tx \notin p.mempool)$
 
-In blockchain, a tx is (or not) valid in a given state.
-That is a transaction can be valid (or not) at a given height of the ledger.
-To model this, consider that $p.ledger.valid(tx)$ is such a check for the current height of the ledger at process $p$ (ABCI call).
+In blockchain, a transaction is (or not) valid in a given state.
+That is, a transaction can be valid (or not) at a given height of the ledger.
+To model this, consider a transaction $tx$.
+Let $p.ledger.valid(tx)$ be such a check at the current height of the ledger at process $p$ (ABCI call).
 Our third invariant is that only valid transactions are present in the mempool:  
 **INV3.** $\forall tx, \forall p \in Correct. \square(tx \in p.mempool \implies p.ledger.valid(tx))$
 
@@ -148,10 +127,13 @@ Namely, if a transaction appears at a correct process then eventually it is comm
 **INV4** $\forall tx. \forall p \in Correct. \square(tx \in p.mempool \implies \lozenge\square(tx \in p.committed \vee \neg p.ledger.valid(tx)))$
 
 The above invariant ensures that if a transaction enters the mempool, then it eventually leaves it at all the correct processes.
-It requires from the application that the validity of a transaction converges toward some value.
-That is, in every run, there is a height after which $valid(tx)$ always returns the same value.
-This happens in [Ethereum](https://github.com/ethereum/go-ethereum/blob/5c51ef8527c47268628fe9be61522816a7f1b395/light/txpool.go#L401) as a transaction is always valid until a transaction from the same address executes with the same or higher nonce.
-A simpler way to satisfy this requirement is by having $valid(tx)$ deterministic and stateless (e.g., a syntactic check).
+For this to be true, the client application must ensure that the validity of a transaction converges toward some value.
+That is, there is a height after which $valid(tx)$ always returns the same value.
+This requirement is termed _eventual non-oscillation_ (see this [section](https://github.com/cometbft/cometbft/blob/main/spec/abci/abci%2B%2B_app_requirements.md) of the ABCI documentation).
+It also appears in [Ethereum](https://github.com/ethereum/go-ethereum/blob/5c51ef8527c47268628fe9be61522816a7f1b395/light/txpool.go#L401) as a transaction is always valid until a transaction from the same address executes with the same or higher nonce.
+A simple way to satisfy this for the programmer is by having $valid(tx)$ deterministic and stateless (e.g., a syntactic check).
+
+A quint specification of the above abstraction is available [here](https://github.com/cometbft/knowledge-base/blob/main/quint/mempool/Mempool.qnt).
 
 **Practical considerations.**
 In practice, as it requires to traverse the whole ledger, INV2 is too expensive.
@@ -167,23 +149,23 @@ Ideally, $\beta$ equals $1$.
 In practice, $\beta = f(T)$ for some function f of the maximal number of transactions T submitted between two heights.
 Given some transaction $tx$, variable $p.valid[tx]$ tracks the number of times the application was asked at the current height.
 Invariant INV3 is replaced with:  
-**INV3a.** $\forall tx. \forall p \in Correct. \square(tx \in p.mempool \implies p.valid[tx] \in [1, \beta])$
+**INV3a.** $\forall tx. \forall p \in Correct. \square(tx \in p.hmempool \implies p.valid[tx] \in [1, \beta])$
 
-
-## Implementation in CometBFT (as of v0.38.0-alpha.2)
+## Correctness of the implementation in CometBFT (as of v0.38.0-rc1)
 
 The mempool is implemented in `clist_mempool.go`, in the `CListMempool` data type.
 `CListMempool` uses a single variable for the two mechanisms covered in the previous section.
-Below, we present this approach in detail then establish its correctness.
+Below, we present this approach at coarse grain, then establish its correctness.
 
 **Algorithm**
 For starters, we explain at a high-level the logic in `CListMempool`.
 Variables `txs` and `cache` respectively hold the mempool and the validity cache in a FIFO and LRU list.
 We omit the use of `txsMap`, assuming that a transaction is in `txs` iff it is also in `txsMap` (see [this](https://github.com/cometbft/cometbft/pull/890) fix).
-For simplicity, we consider that 
-_(i)_ the mempool is never full, 
-_(ii)_ invalid transactions are _not_ kept in the cache, that is the parameter `KeepInvalidTxsInCache` is always set to false, and
-_(iii)_ the `flush` operation is never called.
+For simplicity, we shall also consider that
+- the mempool is never full,
+- invalid transactions are _not_ kept in the cache (`mem.config.KeepInvalidTxsInCache=false`), and
+- the mempool rechecks the transactions that are still present (`mem.config.Recheck=true`).
+
 In addition, we shall assume that a finite amount of transactions is received by the system, and that if a transaction is received at a correct process, then it is eventually received at all the correct processes (thanks to the gossip layer in `mempool/reactor.go`).
 
 Then, let us consider some transaction $tx$.
@@ -191,7 +173,7 @@ According to the logic in `clist_mempool.go`,
 
 $tx$ is added to the cache at time $t$ (in short, @t) if  
 (1) $tx$ is received and not already there @t (`checkTx`, [l237](https://github.com/cometbft/cometbft/blob/1f524d12996204f8fd9d41aa5aca215f80f06f5e/mempool/clist_mempool.go#L237)), or  
-(2) $tx$ is committed and valid @$t (`update`, [l598](https://github.com/cometbft/cometbft/blob/1f524d12996204f8fd9d41aa5aca215f80f06f5e/mempool/clist_mempool.go#L598)).
+(2) $tx$ is committed and valid @t (`update`, [l598](https://github.com/cometbft/cometbft/blob/1f524d12996204f8fd9d41aa5aca215f80f06f5e/mempool/clist_mempool.go#L598)).
 
 $tx$ is removed from the cache @t if  
 (3) $tx$ was received @t'<t, re-checked and invalid t'<@t''<t (`resCbRecheck`, [l477](https://github.com/cometbft/cometbft/blob/1f524d12996204f8fd9d41aa5aca215f80f06f5e/mempool/clist_mempool.go#L4747)), or  
@@ -214,7 +196,7 @@ In addition, following the logic of CometBFT,
 We now establish that the above algorithm implements the mempool abstraction.
 For invariants INV2a and INV3a, we show that **there exist** such an $\alpha$ and $\beta$, but we do not look at characterizing them precisely.
 Regarding INV4, we shall assume that step (1) occurs infinitely often and not once upon the reception of the transaction.
-This models that a CometBFT client may re-submit a failed transaction forever until it succeeds (if it does).
+This models that a CometBFT client may re-submit a transaction forever until it succeeds (if it does), i.e., it is both committed and valid at some height.
 
 The refinement mapping from `CListMempool` to the mempool abstraction is as follows:
 Step (1) increments $p.valid[tx]$, which is initially set to 0.
@@ -242,7 +224,7 @@ For any transaction $tx$, this counter is set to $0$ initially.
 Hence, $p.valid[tx]$ was incremented at some height $h' \leq h$.
 Consider the point in time $t'$, where p moves to height $h$.
 If $p.valid[tx]$ equals 0 at that time, then it was incremented at height h.
-From (6), it is necessarily valid at height h, as requied.
+From (6), it is necessarily valid at height $h$, as required.
 Otherwise, the transaction is rechecked at the current (new) height h with step (8).
 Because $p.valid[tx]$ is not reset, it follows that the application considers it valid at h 
 
@@ -256,7 +238,8 @@ When this happens at time $t$ (line 474), the transaction is also removed from t
 By assumption, step (1) is eventually re-executed for transaction $tx$ after time $t$.
 Because $tx$ is no more in the cache, it is added again after time $t$.
 Now, assume that transaction $tx$ is not invalid infinitely often at process $p$.
-Hencce after some time, it is always valid at $p$.
+By assumption, the validity of a transaction converges toward some value.
+Hence after some time, it is always valid at $p$.
 Observe that this is also eventually the case at all the correct processes in the system.
 Name $t'$ the moment in time when this occurs.
 By assumption, there are only a bounded amount of transactions submitted in the system.
@@ -264,9 +247,9 @@ After time $max(t,t')$, $tx$ is eventually submitted at some height at which it 
 
 *A remark.* 
 The reader might observe that in the above reasoning we do not use step (5).
-This comes from the fact that stricly speaking this step is not necessary for the mempool invariants to hold.
+This comes from the fact that strictly speaking this step is not necessary for the mempool invariants to hold.
 One could consider a stronger variation of INV4 in which a transaction is eventually either 
 forever invalid,
 or at some height both valid and committed.
 This variation would necessitate step (5) to oust a committed yet invalid transaction from the cache.
-It remains unclear whether this stronger variation of INV4, and thus of the mempool abstraction, is of interest or not to the application.
+It remains unclear whether this stronger variation of INV4, and thus of the mempool abstraction, is of interest or not to applications.
