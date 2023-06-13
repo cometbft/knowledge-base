@@ -222,7 +222,7 @@ module mempoolv0 {
       */
     // [CListMempool.Update]: https://github.com/CometBFT/cometbft/blob/6498d67efdf0a539e3ca0dc3e4a5d7cb79878bb2/mempool/clist_mempool.go#L577
     //-- __subaction__: this action is not part of the next-state relation
-    action Update(node: NodeId, h: Height, txs: Set[Tx], txValidResults: Tx -> bool): bool = all {
+    action Update(node: NodeId, h: Height, txs: Set[Tx], execTxResults: Tx -> bool): bool = all {
         require(h > node.MempoolHeight()),
 
         // Update mempool's height.
@@ -237,8 +237,8 @@ module mempoolv0 {
         //      so we add it to the cache just for this case.
         // - Remove invalid txs, if keepInvalidTxsInCache is false.
         //      If we know that tx is invalid, we need to remove it from the cache.
-        val validTxs = txs.filter(tx => txValidResults.get(tx))
-        val invalidTxs = txs.filter(tx => not(txValidResults.get(tx)) and not(Configs.get(node).keepInvalidTxsInCache)) 
+        val validTxs = txs.filter(tx => execTxResults.get(tx))
+        val invalidTxs = txs.filter(tx => not(execTxResults.get(tx)) and not(Configs.get(node).keepInvalidTxsInCache)) 
         cache' = cache.mapPut(node, (ts) => ts.union(validTxs).exclude(invalidTxs)),
 
         // Either recheck non-committed txs to see if they became invalid
@@ -335,9 +335,11 @@ module mempoolv0 {
     //-- __subaction__: this action is not part of the next-state relation
     action BlockExecutor_MempoolUpdate_proposer_(node, txs, nextBlockHeight) = all {
         node.setStep("UpdateAsProposer", txs.mapBy(tx => tx)),
-        val txValidResults: Tx -> bool = txs.mapBy(tx => tx.isValidAt(nextBlockHeight))
-        node.Update(nextBlockHeight, txs, txValidResults),
-        Chain::addNewBlock(txs.filter(tx => tx.isValidAt(nextBlockHeight))),
+        val execTxResults: Tx -> bool = txs.mapBy(tx => tx.isValidAt(nextBlockHeight))
+        all {
+            node.Update(nextBlockHeight, txs, execTxResults),
+            Chain::addNewBlock(txs.filter(tx => execTxResults.get(tx))),
+        }
     }
 
     // This node is the proposer: create the next block with txs from the mempool.
