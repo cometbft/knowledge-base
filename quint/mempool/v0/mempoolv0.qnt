@@ -414,7 +414,11 @@ module mempoolv0 {
         nondet peer = oneOf(Network::Peers.get(node))
         node.P2P_SendTx_(peer)
 
-    /* The reactor sends at once a tx in the mempool to all its peers. */
+    // The reactor sends at once a tx in the mempool to all its peers.
+    // Action `P2P_SendTx` introduces a lot of additional, unnecessary steps to the trace,
+    // one for each peer. It doesn't make any real difference to put the message in
+    // all the peers' inboxes (Network::msgs) at once, because each peer may
+    // process non-deterministically the received message when they need to.
     // [Reactor.broadcastTxRoutine]: https://github.com/CometBFT/cometbft/blob/5049f2cc6cf519554d6cd90bcca0abe39ce4c9df/mempool/reactor.go#L132
     action P2P_BroadcastTx(node: NodeId): bool = all {
         node.setStep("P2P_BroadcastTx", Map()),
