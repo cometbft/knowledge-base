@@ -373,8 +373,8 @@ module mempoolv0 {
     //--------------------------------------------------------------------------
     /* Receive a Txs message from a peer, and calls CheckTx on each Tx. */
     // [Reactor.Receive]: https://github.com/CometBFT/cometbft/blob/111d252d75a4839341ff461d4e0cf152ca2cc13d/mempool/reactor.go#L93
-    action P2P_ReceiveTxs(node) = all {
-        node.setStep("P2P_ReceiveTxs", Map()),
+    action P2P_ReceiveTx(node) = all {
+        node.setStep("P2P_ReceiveTx", Map()),
         require(node.Network::incomingMsgs().nonEmpty()),
         nondet msg = oneOf(node.Network::incomingMsgs())
         all {
@@ -461,7 +461,7 @@ module mempoolv0 {
             node.ReceiveRecheckTxResponse(),
 
             // Receive a Txs message from a peer
-            node.P2P_ReceiveTxs(),
+            node.P2P_ReceiveTx(),
 
             // Send a transaction in the mempool:
             // - to a peer

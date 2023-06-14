@@ -50,7 +50,7 @@ module tests {
     // propagate the transaction to a peer (without receiving the re-CheckTx response)
     run test3 = test1
         .then(node1.P2P_SendTx_(node2))
-        .then(node2.P2P_ReceiveTxs())
+        .then(node2.P2P_ReceiveTx())
         .then(assert_(not(node2.inMempool(tx1)) and tx1.in(node2.Cache())))
 
     // the peer receives the transaction and sends a CheckTx request
@@ -111,7 +111,7 @@ module tests {
     run testNet1 = test1
         .then(P2P_SendTx_(node1, node2))
         .then(assert_(node2.Network::incomingMsgs().nonEmpty()))
-        .then(P2P_ReceiveTxs(node2))
+        .then(node2.P2P_ReceiveTx())
         .then(assert_(node2.Network::incomingMsgs().isEmpty()))
         .then(assert_(tx1.in(node2.Cache())))
 
