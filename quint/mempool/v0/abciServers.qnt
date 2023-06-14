@@ -33,6 +33,13 @@ module abciServers {
         node.Requests().filter(r => r.checkTxType =="Recheck")
 
     //--------------------------------------------------------------------------
+    // [FlushAppConn]: https://github.com/cometbft/cometbft/blob/111d252d75a4839341ff461d4e0cf152ca2cc13d/mempool/clist_mempool.go#L153
+    action FlushConnection(node) = all {
+        require(node.checkTxRequests().isEmpty()),
+        require(node.recheckTxRequests().isEmpty()),
+    }
+
+    //--------------------------------------------------------------------------
     // Actions
     //--------------------------------------------------------------------------
     action init =

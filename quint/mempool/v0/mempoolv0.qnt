@@ -245,7 +245,6 @@ module mempoolv0 {
         // or just notify there're some txs left.
         val txsStillInMempool = node.mempoolTxs().exclude(txs)
         if (txsStillInMempool.nonEmpty())
-            // CHECK: in the code, ReceiveRecheckTxResponse may be called concurrently.
             node.ABCI::sendRequestRecheckTxs(txsStillInMempool, h)
         else ABCI::unchanged,
 
@@ -317,11 +316,22 @@ module mempoolv0 {
     //--------------------------------------------------------------------------
     // Consensus reactor's BlockExecutor updates the mempool with the latest
     // block it created and rechecks outstanding txs.
-    
+
+    // Note that BlockExecutor flushes the mempool's ABCI connection before
+    // committing the block and updating the mempool, to make sure all requests are
+    // processed before advancing to the next height.
+
+    action Flush(node) = all {
+        require(node.ABCI::checkTxRequests().isEmpty()),
+        require(node.ABCI::recheckTxRequests().isEmpty()),
+    }
+
+
     // This node is not the proposer: take the block from the chain.
     action BlockExecutor_MempoolUpdate_nonProposer(node) = all {
         require(not(Chain::chainIsEmpty)),
         require(node.MempoolHeight() < Chain::latestHeight),
+        node.ABCI::FlushConnection(),
         val nextBlockHeight = node.MempoolHeight() + 1
         val txs: Set[Tx] = Chain::getBlockAt(nextBlockHeight)
         all {
@@ -335,6 +345,7 @@ module mempoolv0 {
     //-- __subaction__: this action is not part of the next-state relation
     action BlockExecutor_MempoolUpdate_proposer_(node, txs, nextBlockHeight) = all {
         node.setStep("UpdateAsProposer", txs.mapBy(tx => tx)),
+        node.ABCI::FlushConnection(),
         val execTxResults: Tx -> bool = txs.mapBy(tx => tx.isValidAt(nextBlockHeight))
         all {
             node.Update(nextBlockHeight, txs, execTxResults),
