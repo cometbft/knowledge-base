@@ -2,10 +2,10 @@
 
 set -u
 
-INV=${1:-notFullChain}
-[[ ! -z "${INV}" ]] && echo "Generating trace for ${INV}..." || (echo "INV is empty" && exit 1)
+PROP=${1:-notFullChain}
+[[ ! -z "${PROP}" ]] && echo "Generating trace for ${PROP}..." || (echo "PROP is empty" && exit 1)
 
-TRACES_DIR="traces/$INV"
+TRACES_DIR="traces/$PROP"
 mkdir -p "$TRACES_DIR"
 
 function nextFilename() {
@@ -20,7 +20,7 @@ function nextFilename() {
     echo $name.$ext
 }
 
-FILE_NAME=$(nextFilename $TRACES_DIR "${INV}_trace" "itf.json")
+FILE_NAME=$(nextFilename $TRACES_DIR "${PROP}_trace" "itf.json")
 TRACE_PATH="$TRACES_DIR/$FILE_NAME"
 echo "Generating trace: $TRACE_PATH"
 
@@ -28,6 +28,6 @@ time quint run \
     --verbosity 5 \
     --max-steps=100 \
     --max-samples=3 \
-    --invariant "$INV" \
+    --invariant "$PROP" \
     --out-itf "$TRACE_PATH" \
     mempoolv0.qnt

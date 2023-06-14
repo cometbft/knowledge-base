@@ -28,7 +28,7 @@ verify:
 .PHONY: verify
 
 traces:
-	time ./gen-traces.sh
+	time ./gen-traces.sh ${PROP}
 .PHONY: traces
 
 clean:
