@@ -6,7 +6,7 @@ module properties {
     import mempoolv0.* from "./mempoolv0"
 
     // All gossipped transactions are in the mempool or have been in the mempool.
-    val gissippedTxsHaveBeenInMempool = NodeIds.forall(node => Txs.forall(tx => 
+    val gossippedTxsHaveBeenInMempool = NodeIds.forall(node => Txs.forall(tx => 
         node.History::gossipped(tx) implies node.History::hadInMempool(tx)
     ))
 
@@ -21,7 +21,7 @@ module properties {
     ))
 
     temporal safety = always(all {
-        gissippedTxsHaveBeenInMempool,
+        gossippedTxsHaveBeenInMempool,
         committedTxsAreNotInMempool,
         validTxsAreInMempool,
     })
