@@ -1,6 +1,6 @@
 # Diagram: PEX Reactor
 
-![PEX Reactor](./pex-reactor.png)
+<img src="./pex-reactor.png" style="background-color: white">
 
 The diagram represents the interaction of the PEX reactor with the p2p layer,
 more specifically with the `Switch` and multiple connected `Peer` instances.
