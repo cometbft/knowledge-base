@@ -3,7 +3,7 @@
   This encodes the execution flows of the p2p system of CometBFT for 
   maintaining connections to other
   nodes in the network. It is based on the descriptions in 
-  https://github.com/cometbft/cometbft/blob/91f8dc3ea0490fd824d1d3d346fb0da61de2f848/spec/p2p/architecture/peers-connect.md?plain=1#L1
+  https://github.com/cometbft/knowledge-base/blob/main/p2p/connection-management/peers-connect.md
 
   The funcitionality described here is reactive. It is triggered by
   - The PEX reactor (actually a part of the p2p system)
