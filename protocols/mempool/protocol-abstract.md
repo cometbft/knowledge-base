@@ -5,47 +5,42 @@ disseminating transactions in a CometBFT network.
 
 ## Network model
 
-The network is composed by a set $\Pi$ of nodes.
-The set is dynamic, as nodes may join or leave (possibly by crashing) the
+The mempool protocol operates in a partially-connected network constructed by
+the peer-to-peer (p2p) communication layer running in every participant node.
+
+The network is composed by a set $\Pi$ of nodes running the mempool protocol.
+The set $\Pi$ is dynamic, as nodes may join or leave (possibly by crashing) the
 network at any time.
+Nodes are not expected to know the fully extent of $\Pi$, which is only used
+for formalization purposes.
 
-*Partial knowledge.*
-Nodes are not expected to known the fully extent of $\Pi$,
-i.e. the identity and address of every node in the network.
-Nodes are instead assumed to be part of a peer discovery protocol,
-from which they learn the identity and address of a subset of nodes in $\Pi$.
+The network is partially connected.
+This means that no node is expected to be (directly) connected to every other
+node in the network.
+Instead, each node is connected to a set of $peers$, a subset of other nodes
+with which it can interact directly by exchanging messages.
+The set of peers of a node is dynamic, as the node can establish connections
+with new peers and connections with existing peers can be dropped.
 
-*Partial connectivity.*
-No node is expected to be directly connected to every other node in $\Pi$.
-Instead, each node $p$ is assumed to be directly connected to a subset of other
-nodes, also called its $peers$.
-We denote by $peers[p] \subset \Pi$ the set of nodes directly connected to $p$
-and require $p \notin peers[p]$.
-Connections are bi-directional, i.e. if $q \in peers[p]$ then $p \in peers[q]$.
-As happens to $\Pi$, the set of peers directly connected to each node is also dynamic.
-A node may, at any time, establish connections with new peers,
-or lose its connection with any of its current peers.
-
-*Network overlay.*
-The communication among nodes takes places in the network overlay defined by
-the $peers$  relation.
+The communication among nodes takes places in the network _overlay_ defined by
+the $peers$ relation.
 More precisely, the network overlay is a dynamic undirected graph composed by
-the set $\Pi$ of nodes and a set of edges $(p, q) \subset \Pi x \Pi$
-connecting every $p \in \Pi$ to all its peers $q \in peers[p]$.
-We assume the network overlay to be connected, meaning that there is path
-between every pair of correct nodes in $\Pi$.
-Since the network overlay is dynamic, some paths between correct nodes may be
-disrupted, but we assume that they are eventually repaired or replaced by an
-underlying peer-to-peer overlay management service.
+the set $\Pi$ of nodes and a set of edges $(p, q)$ connecting every $p \in \Pi$
+to all its peers $q \in peers[p]$.
+The network overlay is assumed to be connected, meaning that there is path in
+the network overlay graph between every pair of nodes in $\Pi$.
+Since both $\Pi$ and the $peers$ relation are dynamic, some paths between nodes
+may be disrupted, but it is assumed that they are eventually repaired or
+replaced by the underlying p2p communication layer.
 
-*Links.*
-We assume that links between correct nodes are reliable within a connection.
-More precisely, if a node sends a message to a peer, either the message is
+Finally, the links connecting a node to its peers are assumed to be reliable
+within a connection.
+This means that if a node sends a message to a peer, either the message is
 delivered to the peer or the node disconnects from the peer.
-We assume that links do not duplicate, corrupt, or reorder messages, which are
-delivered in FIFO order.  Links, however, are asynchronous and may arbitrarily
-delay the delivery of messages.
-
+In addition, links do not duplicate, corrupt, or reorder messages, which are
+delivered in FIFO order
+Links, however, are asynchronous and may arbitrarily delay the delivery of
+messages.
 
 ## Transaction flooding algorithm
 
@@ -166,7 +161,7 @@ refined algorithm also addresses the addition of new peers to the `peers` set.
 In fact, all transactions in the `mempool` list are sent to that peer, until
 eventually it catches up with the already connected peers.
 From this point, the refined and the original algorithm essentially operates in
-the same way. 
+the same way.
 
 Another advantage of keeping all transactions to relay in a single list is the
 possibility of removing from the `mempool` transactions that have been committed.
