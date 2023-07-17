@@ -42,31 +42,11 @@ delivered in FIFO order
 Links, however, are asynchronous and may arbitrarily delay the delivery of
 messages.
 
+
 ## Transaction flooding algorithm
 
 The dissemination of transactions happens by flooding transactions in the
 overlay network, as represented in the algorithm below.
-
-The algorithm relies on a `peers` variable that stores the list of peer to
-which the node is directly connected to in the overlay network.
-The `peers` list is dynamic, being updated by the underlying peer-to-peer
-communication layer when new connections are established or existing
-connections are dropped.
-
-Transactions are disseminated by flooding, as the node sends every transaction
-it knows about to every connected peer.
-The only exception is the peer from which the node receives a transaction from
-for the first time, to which it does not send the same transaction back.
-
-The algorithm maintains a map `seen` that allows determining when a transaction
-is seen for the first time.
-It prevents transactions from being indefinitely forwarded to the peers and
-provides a simple mechanism to cease the propagation of transactions when they
-are received by every node in the network.
-
-The algorithm also uses the `seen` map to mark transactions that have been
-committed to the blockchain, and therefore do not need to be further
-propagated.
 
 ```
 var peers // other nodes to which we are directly connected
@@ -89,11 +69,33 @@ upon commit(txs):
         seen[tx] = true
 ```
 
-While representing in high level the operation of the transaction propagation
-protocol, algorithm above has some practical limitations.
-Interestingly, although not stated as requirements for transaction propagation,
-they ended up defined some additional (weak) properties that the mempool
-protocol is expected to address:
+The algorithm represents the operation of a node in the network.
+The `peers` variable stores the list of other nodes to which the node is
+directly connected to in the overlay network.
+The `peers` list is dynamic, being updated by the underlying p2p communication
+layer when new connections are established or existing connections are dropped.
+
+Transactions are disseminated by flooding, as the node sends every transaction
+it receives for the first time to all its `peers`.
+A transaction can be received from an external component, via the `brodcast`
+method, or from a peer, via the `receive` method.
+In the case a transaction is received from a peer, the node does not send the
+same transaction back to that peer.
+
+To determine whether a transaction is received for the first time, the algorithm
+maintains a map `seen` containing every transaction ever received.
+This map prevents transactions from being indefinitely forwarded to the peers
+and provides a simple mechanism to cease the propagation of transactions when
+they are received by every node in the network.
+
+The algorithm also uses the `seen` map to mark transactions that have been
+committed to the blockchain, and therefore do not need to be further
+propagated.
+
+### Limitations
+
+While useful to represent the operation of the transaction propagation
+protocol, the above algorithm has some practical limitations:
 
 1. New peers: the algorithm does not send transactions whose dissemination is
    ongoing to newly connected peers.
@@ -105,18 +107,19 @@ In fact, in case of concurrent invocations of the upon broadcast or receive
 clauses of the algorithm, peers are likely to receive the relayed transactions
 in different orders.
 
-It is worth noting that the mempool does not (and cannot) provide any guarantee
-of transaction ordering when sending transactions to peers (either existing or new).
-However, users of the protocol expect the mempool protocol to address the above
-two limitations, which can be attested by the only document specifically
-addressing the mempool in CometBFT documentation:
-https://github.com/cometbft/cometbft/blob/main/docs/core/mempool.md
-
 The next algorithm is refinement of the above presented algorithm so that to
 address those limitations.
 This first algorithm, however, is relevant because it is easier to analyze
 and allows a simplified representation of the 
 [propagation mechanism](./protocol-abstract.md#analysis-of-the-propagation).
+
+> It is worth noting that the mempool does not (and cannot) provide any guarantee
+> of transaction ordering when sending transactions to peers (either existing or new).
+> However, users of the protocol expect the mempool protocol to address the above
+> two limitations, which can be attested by the only document specifically
+> addressing the mempool in CometBFT documentation:
+> https://github.com/cometbft/cometbft/blob/main/docs/core/mempool.md
+
 
 ## Mempool flooding algorithm
 
@@ -153,8 +156,8 @@ And, for each peer, a `send_routine` is created in order to iterate through the
 To handle exceptions of the algorithm, this refined version also includes a
 `senders` map that stores, for every transaction, the set of peers, if any, to
 which that transaction should not be sent.
-This set is initialized to the peer from which a transaction is received for
-the first time, if it was a peer and not an external component.
+This set is initialized to the peer from which a transaction is received via
+the newtork for the first time.
 
 By keeping all the transactions that should be sent to peers in a list, the
 refined algorithm also addresses the addition of new peers to the `peers` set.
