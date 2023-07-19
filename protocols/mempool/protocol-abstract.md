@@ -193,7 +193,7 @@ upon receive <TX, tx> from p:
         seen = append(seen, tx)
         senders[tx] = append(senders[tx], p)
         mempool = append(mempool, tx)
-    else if seen[tx] // Optional improvement
+    else if tx in seen // Optional improvement
         senders[tx] = append(senders[tx], q)
 
 upon commit(txs):
