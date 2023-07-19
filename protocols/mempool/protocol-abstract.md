@@ -225,8 +225,89 @@ For defining this it is relevant to analyse how the propagation of a
 transaction works in different situations, which is the topic of the next section.
 
 
-## Analysis of the propagation
+## Representing the propagation of transactions
 
+This section proposes a graph representation for the propagation of
+transactions via the mempool protocol.
+The reference is the simplified transaction flooding mechanism presented
+[here](./protocol-abstract.md#transaction-flooding-algorithm).
 
-Illustration of propagation: https://lucid.app/lucidchart/2a1f309d-6dd7-4466-853d-9efa964e5c1d/edit?viewport_loc=1%2C-11%2C3067%2C1476%2C0_0&invitationId=inv_c4bbad76-ccc4-4803-8040-fd15c5fd94eb
+The propagation of a transaction `tx` is represented by a directed tree graph.
+The vertices of the propagation graph represent steps of the transaction
+flooding algorithm taken by nodes when propagating transaction `tx`.
+And links in the propagation graph represent the sending of a `TX` message
+carrying the transaction `tx` between two nodes.
 
+More formally, a vertex of the propagation graph is a tuple $(p, s, t)$ which
+represents the step $s$ of the algorithm taken by node $p$ at a reference time $t$.
+Two vertices of the graph are connected when there is a causal relation between
+the steps of the algorithm represented by them.
+More precisely, a link connects vertices $(s, p, t)$ to $(s', q, t')$ if the
+execution of step $s$ of the algorithm by process $p$ at time $t$ leads to the
+execution of step $s'$ at process $q$ at a time $t' > t$.
+
+When considering the transaction flooding algorithm, the source of links in the
+propagation graph are vertices $(s, p, t)$ representing either the upon
+`broadcast` or `receive` clauses of the algorithm at a process $p$.
+There are outbound links from such vertices if, as a result of performing step
+$s$ at time $t$, process $p$ sends a `TX` message to a subset of its peers.
+The destinations of links, in they turn, can only be vertices $(s', q, t')$
+where $s'$ is the upon `receive` clause of the algorithm and $q$ is a process
+that belongs to the set of peers of process $p$.
+
+The inclusion of the reference time $t$ to label a vertex of the propagation
+graph has two goals.
+The first is to render vertices unique, since the same process $p$ can perform
+the same step $s$ (e.g., the `receive` step) multiple times for the same
+transaction `tx`.
+The second reason is to enable the representation of the _first_  time at which
+a step of the algorithm is performed at a given process for a transaction `tx`.
+This is relevant because a process only take actions regarding a transaction
+the first time it is received.
+
+### Analysis
+
+The figure below is an example of a graph representing the propagation of a
+transaction in a network with five nodes.
+The left side of the figure represents the network overlay.
+Notice that the overlay is partially connected, with every node having two or
+three peers.
+The right side of the figure represents two possible propagation graphs for
+that network.
+For simplicity, the vertices are only labeled with the processes identifier;
+the actions taken are described in the following, while it is considered a
+graphical representation of the reference time, where a vertex depicted below
+another vertex is associated with a greater reference time.
+In other words, the reference time increases from top to bottom.
+
+> TODO: check this illustration and transfer it to this repository: https://lucid.app/lucidchart/2a1f309d-6dd7-4466-853d-9efa964e5c1d/edit?viewport_loc=1%2C-11%2C3067%2C1476%2C0_0&invitationId=inv_c4bbad76-ccc4-4803-8040-fd15c5fd94eb
+
+In both propagation graphs depicted, process `A` is the only process to process
+a `broadcast` event for the considered transaction.
+It is therefore the only root of the propagation trees.
+All the other nodes of the propagation trees represent `receive` steps
+performed by multiple processes.
+What differs between the two trees is the order at which each `receive` step is
+performed at different nodes.
+Vertices representing the _first time_ that a node processes the transaction
+are highlighted.
+Notice that only the highlighted vertices have outbound links.
+This happens because in other vertices from the same process, the transaction
+is already on the `seen` map and therefore no action is taken.
+The non-highlighted vertices also represent the redundancy of the transaction
+propagation mechanism, namely the steps (and the messages triggering those
+steps) that could be avoided because they are redundant.
+
+In both cases, in a network with five nodes and six connections between nodes,
+the propagation algorithm requires eight communication steps.
+Notice that are two more communication steps than links in the overlay graph,
+meaning that two pairs of nodes exchange the transaction among themselves in
+both directions of the same link (`C` to `B` and `D` to `E` in the first
+example, and `A` to `C` and `B` to `E` in the second example).
+This two scenarios are highlighted by using a dashed line to connect the two
+vertices for the latter (greater timestamped) vertices.
+These are also communication steps that might be prevented by the algorithm, in
+particular in the refined mempool flooding algorithm, by keeping track of the
+multiple known senders of a transaction.
+The other redundant steps essentially cannot be avoided, as they result from
+concurrent and unrelated paths in the propagation graph.
