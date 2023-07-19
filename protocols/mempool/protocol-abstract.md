@@ -191,7 +191,7 @@ upon brodcast(tx):
 upon receive <TX, tx> from p:
     if tx not in seen and valid(tx)
         seen = append(seen, tx)
-        senders[tx] = p
+        senders[tx] = append(senders[tx], p)
         mempool = append(mempool, tx)
     else if seen[tx] // Optional improvement
         senders[tx] = append(senders[tx], q)
