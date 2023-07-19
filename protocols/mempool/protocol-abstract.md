@@ -1,6 +1,6 @@
 # Transaction dissemination protocol [WIP]
 
-This document describes in high level the mempool protocol, responsible for
+This document describes at a high level the mempool protocol, responsible for
 disseminating transactions in a CometBFT network.
 
 ## Network model
@@ -11,8 +11,8 @@ the peer-to-peer (p2p) communication layer running in every participant node.
 The network is composed by a set $\Pi$ of nodes running the mempool protocol.
 The set $\Pi$ is dynamic, as nodes may join or leave (possibly by crashing) the
 network at any time.
-Nodes are not expected to know the fully extent of $\Pi$, which is only used
-for formalization purposes.
+Nodes are not expected to know the full extent of $\Pi$, which is only used
+for model purposes.
 
 The network is partially connected.
 This means that no node is expected to be (directly) connected to every other
@@ -27,7 +27,7 @@ the $peers$ relation.
 More precisely, the network overlay is a dynamic undirected graph composed by
 the set $\Pi$ of nodes and a set of edges $(p, q)$ connecting every $p \in \Pi$
 to all its peers $q \in peers[p]$.
-The network overlay is assumed to be connected, meaning that there is path in
+The network overlay is assumed to be connected, meaning that there is a path in
 the network overlay graph between every pair of nodes in $\Pi$.
 Since both $\Pi$ and the $peers$ relation are dynamic, some paths between nodes
 may be disrupted, but it is assumed that they are eventually repaired or
@@ -35,10 +35,10 @@ replaced by the underlying p2p communication layer.
 
 Finally, the links connecting a node to its peers are assumed to be reliable
 within a connection.
-This means that if a node sends a message to a peer, either the message is
+This means that if a node sends a message to one of its peers, either the message is
 delivered to the peer or the node disconnects from the peer.
 In addition, links do not duplicate, corrupt, or reorder messages, which are
-delivered in FIFO order
+delivered in FIFO order.
 Links, however, are asynchronous and may arbitrarily delay the delivery of
 messages.
 
@@ -46,7 +46,7 @@ messages.
 ## Transaction flooding algorithm
 
 The dissemination of transactions happens by flooding transactions in the
-overlay network, as represented in the algorithm below.
+overlay network, as captured by the algorithm below.
 
 ```
 var peers // other nodes to which we are directly connected
@@ -107,7 +107,7 @@ In fact, in case of concurrent invocations of the upon broadcast or receive
 clauses of the algorithm, peers are likely to receive the relayed transactions
 in different orders.
 
-The next algorithm is refinement of the above presented algorithm so that to
+The next algorithm refines the above algorithm by addressing those limitations.
 address those limitations.
 This first algorithm, however, is relevant because it is easier to analyze
 and allows a simplified representation of the 
@@ -127,7 +127,7 @@ The following algorithm is obtained by refining the previous algorithm as follow
 
 The first step is to replace the blocking **send** invocations by non-blocking
 equivalents which _schedule_ the sending of a transaction to a peer.
-The scheduled send calls have to preserve order, in the sense that the sending
+The scheduled sending actions have to preserve order, in the sense that the sending
 of two transactions to the same peer must be performed in the same order at
 which they were scheduled.
 
