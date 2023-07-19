@@ -70,7 +70,7 @@ upon commit(txs):
 ```
 
 The algorithm represents the operation of a node in the network.
-The `peers` variable stores the list of other nodes to which the node is
+The `peers` variable stores the list of peers of the node, that is the nodes to which it is
 directly connected to in the overlay network.
 The `peers` list is dynamic, being updated by the underlying p2p communication
 layer when new connections are established or existing connections are dropped.
