@@ -50,23 +50,23 @@ overlay network, as captured by the algorithm below.
 
 ```
 var peers // other nodes to which we are directly connected
-var seen  // map of transactions already seen
+var seen  // set of transactions already seen, initially empty
 
 upon brodcast(tx):
-    if not seen[tx] and valid(tx)
-        seen[tx] = true
+    if tx not in seen and valid(tx)
+        seen = append(seen, tx)
         for all p in peers
             send(<TX, tx>) to p
 
 upon receive <TX, tx> from p:
-    if not seen[tx] and valid(tx)
-        seen[tx] = true
+    if tx not in seen and valid(tx)
+        seen = append(seen, tx)
         for all q in peers; q != p
             send(<TX, tx>) to q
 
 upon commit(txs):
     for all tx in txs
-        seen[tx] = true
+        seen = append(seen, tx)
 ```
 
 The algorithm represents the operation of a node in the network.
@@ -83,12 +83,12 @@ In the case a transaction is received from a peer, the node does not send the
 same transaction back to that peer.
 
 To determine whether a transaction is received for the first time, the algorithm
-maintains a map `seen` containing every transaction ever received.
+maintains a set `seen` containing every transaction ever received.
 This map prevents transactions from being indefinitely forwarded to the peers
 and provides a simple mechanism to cease the propagation of transactions when
 they are received by every node in the network.
 
-The algorithm also uses the `seen` map to mark transactions that have been
+The algorithm also uses the `seen` set to mark transactions that have been
 committed to the blockchain, and therefore do not need to be further
 propagated.
 
@@ -171,25 +171,25 @@ possibility of removing from the `mempool` transactions that have been committed
 While this operation is not really simple to implement in practice, it prevents
 sending committed transactions whose send was originally scheduled, either to
 existing and new peers.
-Note, however, that only adding the transaction to the `seen` map should be
-enough for correctness, in particular because a second check to the `seen` map
+Note, however, that only adding the transaction to the `seen` set should be
+enough for correctness, in particular because a second check to the `seen` set
 could be performed before actually sending the transaction to a peer.
 
 
 ```
 var peers   // other nodes to which we are directly connected
-var seen    // map of transactions already seen
+var seen    // set of transactions already seen, initially empty
 var mempool // list of transactions
 var senders // map of processes from which transactions were received
 
 upon brodcast(tx):
-    if not seen[tx] and valid(tx)
-        seen[tx] = true
+    if tx not in seen and valid(tx)
+        seen = append(seen, tx)
         mempool = append(mempool, tx)
 
 upon receive <TX, tx> from p:
-    if not seen[tx] and valid(tx)
-        seen[tx] = true
+    if tx not in seen and valid(tx)
+        seen = append(seen, tx)
         senders[tx] = p
         mempool = append(mempool, tx)
     else if seen[tx] // Optional improvement
@@ -197,7 +197,7 @@ upon receive <TX, tx> from p:
 
 upon commit(txs):
     for all tx in txs
-        seen[tx] = true
+        seen = append(seen, tx)
         mempool = remove(mempool, tx) // Optional improvement
 
 func send_routine(p):
@@ -293,7 +293,7 @@ Vertices representing the _first time_ that a node processes the transaction
 are highlighted.
 Notice that only the highlighted vertices have outbound links.
 This happens because in other vertices from the same process, the transaction
-is already on the `seen` map and therefore no action is taken.
+is already on the `seen` set and therefore no action is taken.
 The non-highlighted vertices also represent the redundancy of the transaction
 propagation mechanism, namely the steps (and the messages triggering those
 steps) that could be avoided because they are redundant.
