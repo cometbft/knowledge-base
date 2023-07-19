@@ -210,8 +210,12 @@ func send_routine(p):
             send(<TX, tx>) to p
 
 upon add_peer(p):
+    peers = append(peers, p)
     spawn send_routine(p)
 
+
+upon remove_peer(p):
+    peers = remove(peers, p) // this causes the send_routine(p) to leave
 ```
 
 A last possibility added by this refinement is the use of the `senders` map to
