@@ -75,10 +75,12 @@ directly connected to in the overlay network.
 The `peers` list is dynamic, being updated by the underlying p2p communication
 layer when new connections are established or existing connections are dropped.
 
-Transactions are disseminated by flooding, as the node sends every transaction
+Transactions are disseminated by flooding, as the node sends every valid transaction
 it receives for the first time to all its `peers`.
+The `valid(tx)` method is assumed to return true if the transaction is valid;
+its implementation is outside the scope of this simplified flooding algorithm.
 Transactions are sent using a message of `TX` type, which carries a single transaction.
-A transaction can be received from an external component, via the `brodcast`
+A transaction can be received from an external component, via the `broadcast`
 method, or from a peer, via the `receive` method.
 In the case a transaction is received from a peer, the node does not send the
 same transaction back to that peer.
