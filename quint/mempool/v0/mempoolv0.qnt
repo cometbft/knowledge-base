@@ -132,7 +132,7 @@ module mempoolv0 {
     action addSender(node, tx, senderId) =
         if (node.inMempool(tx)) {
             val oldMemTx: MempoolTx = node.chooseSomeMemTxFor(tx)
-            val newMemTx = oldMemTx.with("senders", oldMemTx.senders.union(senderId))
+            val newMemTx = oldMemTx.with("senders", oldMemTx.senders.union(Set(senderId)))
             mempool' = mempool.mapPut(node, (memTxs) => memTxs.setRemove(oldMemTx).setAdd(newMemTx))
         } else mempool' = mempool
 
