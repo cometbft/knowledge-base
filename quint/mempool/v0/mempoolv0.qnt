@@ -30,7 +30,7 @@ module mempoolv0 {
         Params::__Configs
 
     //--------------------------------------------------------------------------
-    // Auxiliary variables
+    // State auxiliary variables
     //--------------------------------------------------------------------------
     type Step = str
 
@@ -48,18 +48,45 @@ module mempoolv0 {
         _error' = { node: node, error: err }
 
     //--------------------------------------------------------------------------
+    // List of senders + auxiliary definitions
+    //--------------------------------------------------------------------------
+
+    // peers that send tx, or none if tx was emmitted by a client
+    var txSenders: NodeId -> Tx -> Set[NodeId]
+
+    def TxSenders(nodeId) = txSenders.get(nodeId)
+
+    // Returned value is Optional: either none or a singleton.
+    def sendersFor(node: NodeId, tx: Tx): Set[NodeId] = 
+        if (tx.in(node.TxSenders().keys()))
+            node.TxSenders().get(tx)
+        else Set()
+
+    action addSenderToTx(node, tx, senderId) =
+        if (senderId != noNode) {
+            txSenders' = txSenders.mapPut(node, (oldMap) => 
+            if (tx.in(node.TxSenders().keys()))
+                oldMap.mapPut(tx, (oldSenders) => oldSenders.setAdd(senderId))
+            else 
+                oldMap.put(tx, Set(senderId)))
+        } else txSenders' = txSenders
+
+    action removeSenders(node: NodeId, txs: Set[Tx]): bool =
+        txSenders' = txSenders.mapPut(node, (oldMap) => oldMap.mapRemoveMultiple(txs))
+
+
+    //--------------------------------------------------------------------------
     // Mempool state
     //--------------------------------------------------------------------------
     
     // The data structure stored of the elements stored in the mempool.
-    // [mempoolTx]: https://github.com/CometBFT/cometbft/blob/6498d67efdf0a539e3ca0dc3e4a5d7cb79878bb2/mempool/clist_mempool.go#L671
+    // [mempoolTx]: https://github.com/cometbft/cometbft/blob/v0.38.0-rc3/mempool/mempoolTx.go#L11
     type MempoolTx = { 
         tx: Tx, 
         height: Height, // height at which tx was validated
-        senders: Set[NodeId] // peers that send tx, or none if tx was emmitted by a client
     }
 
-    val noMempoolTx = { tx: "", height: 0, senders: Set() }
+    val noMempoolTx = { tx: "", height: 0 }
 
     // The main data structure in the mempool. 
     // The actual implementation is a list (a queue), but we modelled it as a
@@ -111,35 +138,21 @@ module mempoolv0 {
         val memTxs = node.memTxFor(tx).setToList()
         if (memTxs.length() == 1) memTxs[0] else noMempoolTx
 
-    // Returned value is Optional: either none or a singleton.
-    def sendersFor(node: NodeId, tx: Tx): Set[NodeId] = 
-        node.memTxFor(tx).map(e => e.senders).flatten()
-
     def inMempool(node, tx) =
         tx.in(node.mempoolTxs())
 
-    def senderFor(node, tx) = 
-        node.Mempool().map(e => e.tx)
-
-    action addToMempool(node, tx, h, senderId) =
-        val senders = if (senderId == noNode) Set() else Set(senderId)
-        val memTx = { tx: tx, height: h, senders: senders }
+    action addToMempool(node, tx, h) =
+        val memTx = { tx: tx, height: h }
         mempool' = mempool.mapPut(node, (memTxs) => memTxs.setAdd(memTx))
 
     action removeFromMempool(node: NodeId, txs: Set[Tx]): bool =
         mempool' = mempool.mapPut(node, (memTxs) => memTxs.filter(e => e.tx.notIn(txs)))
 
-    action addSender(node, tx, senderId) =
-        if (node.inMempool(tx)) {
-            val oldMemTx: MempoolTx = node.chooseSomeMemTxFor(tx)
-            val newMemTx = oldMemTx.with("senders", oldMemTx.senders.union(Set(senderId)))
-            mempool' = mempool.mapPut(node, (memTxs) => memTxs.setRemove(oldMemTx).setAdd(newMemTx))
-        } else mempool' = mempool
-
     //--------------------------------------------------------------------------
     // Actions
     //--------------------------------------------------------------------------
     action init = all {
+        txSenders' = NodeIds.mapBy(_ => Map()),
         mempool' = NodeIds.mapBy(_ => Set()),
         cache' = NodeIds.mapBy(_ => Set()),
         _step' = { node: noNode, name: "init", args: Map() },
@@ -153,35 +166,29 @@ module mempoolv0 {
     
     // Validate an incoming transaction by sending an ABCI request to the
     // application.
-    // [CListMempool.CheckTx]: https://github.com/CometBFT/cometbft/blob/5a8bd742619c08e997e70bc2bbb74650d25a141a/mempool/clist_mempool.go#L202
+    // [CListMempool.CheckTx]: https://github.com/CometBFT/cometbft/blob/v0.38.0-rc3/mempool/clist_mempool.go#L219
     //-- __subaction__: this action is not part of the next-state relation
-    action CheckTx(node: NodeId, tx: Tx, senderId: NodeId): bool = all {
+    action CheckTx(node: NodeId, tx: Tx): bool = all {
         if (node.mempoolIsFull()) all {
             node.setError(MempoolIsFullError),
-            mempool' = mempool,
             cache' = cache,
             ABCI::unchanged,
         } else if (tx.in(node.Cache())) all {
-            // Record new sender for the tx we've already seen.
-            // Note it's possible a tx is still in the cache but no longer in the mempool
-            // (eg. after committing a block, txs are removed from mempool but not cache),
-            // so we only record the sender for txs still in the mempool.
-            node.addSender(tx, senderId),
             node.setError(TxInCacheError),
             cache' = cache,
             ABCI::unchanged,
         } else all {
             node.addToCache(tx),
-            node.ABCI::sendRequestNewCheckTx(tx, senderId, node.MempoolHeight() + 1),
+            node.ABCI::sendRequestNewCheckTx(tx, node.MempoolHeight() + 1),
             node.setError(noError),
-            mempool' = mempool,
         },
+        mempool' = mempool,
         mempoolHeight' = mempoolHeight,
     }
 
     // Callback function to process a CheckTx response of type "New".
     // Note that tx and sender are arguments to CListMempool.resCbFirstTime.
-    // [CListMempool.resCbFirstTime]: https://github.com/CometBFT/cometbft/blob/6498d67efdf0a539e3ca0dc3e4a5d7cb79878bb2/mempool/clist_mempool.go#L369
+    // [CListMempool.resCbFirstTime]: https://github.com/CometBFT/cometbft/blob/v0.38.0-rc3/mempool/clist_mempool.go#L377
     action ReceiveCheckTxResponse(node) = all {
         node.setStep("ReceiveCheckTxResponse", Map()),
         require(node.ABCI::checkTxRequests().nonEmpty()),
@@ -197,9 +204,8 @@ module mempoolv0 {
                     History::unchanged,
                 } else all { 
                     require(not(node.inMempool(req.tx))),
-                    val senderId = node.ABCI::senderFor(req)
                     val h = node.ABCI::heightFor(req) // height at which tx was validated
-                    node.addToMempool(req.tx, h, senderId),
+                    node.addToMempool(req.tx, h),
                     node.setError(noError),
                     node.History::recordMempoolTx(req.tx),
                     cache' = cache,
@@ -211,6 +217,7 @@ module mempoolv0 {
                 History::unchanged,
             }
         },
+        txSenders' = txSenders,
         mempoolHeight' = mempoolHeight,
         Network::unchanged,
         Chain::unchanged,
@@ -220,7 +227,7 @@ module mempoolv0 {
       * txResults are the results of ResponseFinalizeBlock for every tx in txs.
       * BlockExecutor holds the mempool lock while calling this function.
       */
-    // [CListMempool.Update]: https://github.com/CometBFT/cometbft/blob/6498d67efdf0a539e3ca0dc3e4a5d7cb79878bb2/mempool/clist_mempool.go#L577
+    // [CListMempool.Update]: https://github.com/CometBFT/cometbft/blob/v0.38.0-rc3/mempool/clist_mempool.go#L600
     //-- __subaction__: this action is not part of the next-state relation
     action Update(node: NodeId, h: Height, txs: Set[Tx], execTxResults: Tx -> bool): bool = all {
         require(h > node.MempoolHeight()),
@@ -230,6 +237,7 @@ module mempoolv0 {
 
         // Remove all txs from the mempool.
         node.removeFromMempool(txs),
+        node.removeSenders(txs),
 
         // Update cache for all transactions.
         // - Add valid committed txs to the cache (in case they are missing).
@@ -254,7 +262,7 @@ module mempoolv0 {
     }
 
     // Callback function to process a CheckTx response with type "Recheck".
-    // [CListMempool.resCbRecheck]: https://github.com/CometBFT/cometbft/blob/6498d67efdf0a539e3ca0dc3e4a5d7cb79878bb2/mempool/clist_mempool.go#L432
+    // [CListMempool.resCbRecheck]: https://github.com/CometBFT/cometbft/blob/v0.38.0-rc3/mempool/clist_mempool.go#L453
     action ReceiveRecheckTxResponse(node: NodeId): bool = all {
         node.setStep("ReceiveRecheckTxResponse", Map()),
         require(node.ABCI::recheckTxRequests().nonEmpty()),
@@ -264,9 +272,11 @@ module mempoolv0 {
             node.ABCI::removeRequest(request),
             if (response.err != noError) all {
                 // Tx became invalidated due to newly committed block.
+                node.removeSenders(Set(request.tx)),
                 node.removeFromMempool(Set(request.tx)),
                 node.removeFromCache(request.tx),
             } else all {
+                txSenders' = txSenders,
                 mempool' = mempool,
                 cache' = cache,
             }
@@ -282,11 +292,12 @@ module mempoolv0 {
     //--------------------------------------------------------------------------
     
     // Receive a given transaction from a client via RPC.
-    // [Environment.BroadcastTxAsync]: https://github.com/CometBFT/cometbft/blob/111d252d75a4839341ff461d4e0cf152ca2cc13d/rpc/core/mempool.go#L22
+    // [Environment.BroadcastTxAsync]: https://github.com/CometBFT/cometbft/blob/v0.38.0-rc3/rpc/core/mempool.go#L22
     //-- __subaction__: this action is not part of the next-state relation
     action CheckTxRPC(node, tx) = all {
         node.setStep("ReceiveTxViaRPC", Map("tx" -> tx)),
-        node.CheckTx(tx, noNode),
+        node.CheckTx(tx),
+        txSenders' = txSenders,
         History::recordSubmittedTx(node, tx),
         Network::unchanged,
         Chain::unchanged,
@@ -353,7 +364,7 @@ module mempoolv0 {
         }
     }
 
-    // [ReapMaxBytesMaxGas]: https://github.com/cometbft/cometbft/blob/111d252d75a4839341ff461d4e0cf152ca2cc13d/mempool/clist_mempool.go#L519
+    // [CListMempool.ReapMaxBytesMaxGas]: https://github.com/cometbft/cometbft/blob/v0.38.0-rc3/mempool/clist_mempool.go#L542
     def reapTxs(node) = 
         // Note that block may be empty.
         nondet txs = oneOf(node.mempoolTxs().powerset())
@@ -372,13 +383,14 @@ module mempoolv0 {
     // Mempool reactor (P2P) actions
     //--------------------------------------------------------------------------
     /* Receive a Txs message from a peer, and calls CheckTx on each Tx. */
-    // [Reactor.Receive]: https://github.com/CometBFT/cometbft/blob/111d252d75a4839341ff461d4e0cf152ca2cc13d/mempool/reactor.go#L93
+    // [Reactor.Receive]: https://github.com/CometBFT/cometbft/blob/v0.38.0-rc3/mempool/reactor.go#L93
     action P2P_ReceiveTx(node) = all {
         node.setStep("P2P_ReceiveTx", Map()),
         require(node.Network::incomingMsgs().nonEmpty()),
         nondet msg = oneOf(node.Network::incomingMsgs())
         all {
-            node.CheckTx(msg.tx, msg.senderId),
+            node.addSenderToTx(msg.tx, msg.senderId),
+            node.CheckTx(msg.tx),
             node.Network::receiveMsg(msg),
             History::unchanged,
             Chain::unchanged,
@@ -401,6 +413,7 @@ module mempoolv0 {
             Network::sendTo(msg, peer),
             node.setError(noError),
             node.History::recordGossippedTx(tx),
+            txSenders' = txSenders,
             mempool' = mempool,
             cache' = cache,
             mempoolHeight' = mempoolHeight,
@@ -409,7 +422,7 @@ module mempoolv0 {
         }
     }
 
-    // [Reactor.broadcastTxRoutine]: https://github.com/CometBFT/cometbft/blob/5049f2cc6cf519554d6cd90bcca0abe39ce4c9df/mempool/reactor.go#L132
+    // [Reactor.broadcastTxRoutine]: https://github.com/CometBFT/cometbft/blob/v0.38.0-rc3/mempool/reactor.go#L132
     action P2P_SendTx(node: NodeId): bool =
         nondet peer = oneOf(Network::Peers.get(node))
         node.P2P_SendTx_(peer)
@@ -419,7 +432,7 @@ module mempoolv0 {
     // one for each peer. It doesn't make any real difference to put the message in
     // all the peers' inboxes (Network::msgs) at once, because each peer may
     // process non-deterministically the received message when they need to.
-    // [Reactor.broadcastTxRoutine]: https://github.com/CometBFT/cometbft/blob/5049f2cc6cf519554d6cd90bcca0abe39ce4c9df/mempool/reactor.go#L132
+    // [Reactor.broadcastTxRoutine]: https://github.com/CometBFT/cometbft/blob/v0.38.0-rc3/mempool/reactor.go#L132
     action P2P_BroadcastTx(node: NodeId): bool = all {
         node.setStep("P2P_BroadcastTx", Map()),
         require(not(node.Mempool().isEmpty())),
@@ -432,6 +445,7 @@ module mempoolv0 {
             Network::sendToMany(msg, peers),
             node.setError(noError),
             node.History::recordGossippedTx(tx),
+            txSenders' = txSenders,
             mempool' = mempool,
             cache' = cache,
             mempoolHeight' = mempoolHeight,

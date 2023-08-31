@@ -19,6 +19,7 @@ module tests {
     // helper action for checking a condition in a run
     action assert_(__cond: bool): bool = all {
         __cond,
+        txSenders' = txSenders,
         mempool' = mempool, 
         mempoolHeight' = mempoolHeight, 
         cache' = cache,
@@ -73,6 +74,7 @@ module tests {
     //--------------------------------------------------------------------------
     // an initial state with a non-empty chain
     action init1 = all {
+            txSenders' = NodeIds.mapBy(_ => Map()),
             mempool' = NodeIds.mapBy(_ => Set()),
             cache' = NodeIds.mapBy(_ => Set()),
             _step' = { node: noNode, name: "init", args: Map() },

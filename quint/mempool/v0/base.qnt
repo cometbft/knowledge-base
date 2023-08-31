@@ -90,4 +90,7 @@ module base {
     pure def mapValues(__map: a -> b): Set[b] = 
         __map.keys().map(k => __map.get(k))
 
+    pure def mapRemoveMultiple(__map: a -> b, __keys: Set[a]): (a -> b) = 
+        __map.keys().filter(k => not(k.in(__keys))).mapBy(k => __map.get(k))
+
 }

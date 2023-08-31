@@ -1,10 +1,14 @@
 # Spec of mempool: v0 implementation, with cache
 
 [Quint](https://github.com/informalsystems/quint/) specification of the
-mempool's implementation called v0 as of `v0.38.0-rc1`. In particular, this
+mempool's implementation called v0 as of `v0.38.0-rc3`. In particular, this
 model includes the cache and it follows the code as close as possible so as to
 be ready to apply [model-based testing](https://mbt.informal.systems/) in the
 future.
+
+## Requiremens
+
+- Tested with Quint v0.12.0
 
 ## Tests and traces
 
