@@ -214,7 +214,7 @@ module mempoolv0 {
                 }
             } else all { // ignore invalid transaction
                 node.removeFromCache(req.tx),
-                _error' = InvalidTxWarning,
+                _error' = InvalidTxWarning, // warn that the transaction is invalid
                 mempool' = mempool,
                 History::unchanged,
             }
@@ -565,8 +565,12 @@ module mempoolv0 {
     //--------------------------------------------------------------------------
 
     // a state in which all available transactions (Txs) are included in the chain
-    val FullChain = 
-        Chain::allTxsInChain == Txs
+    // and all nodes have the same height
+    val FullChain = all {
+        Chain::allTxsInChain == Txs,
+        val someNode = _step.node // just pick the node that made the last step
+        NodeIds.forall(node => node.MempoolHeight() == someNode.MempoolHeight()),
+    }
     val notFullChain = not(FullChain)
 
     // a state in which all nodes are synced to height 2
