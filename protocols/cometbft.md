@@ -20,7 +20,7 @@ CometBFT communicates with the (SMR) application via ABCI:
 - ABCI spec (as of `v0.38.x`) _mandates_ that `ProcessProposal` MUST fulfill the following two requirements (non exhaustive)
   - Coherence (1 requirement)
   - Determinism (worded as two requirements)
-- dydx have an application use case that cannot (currently) guarantee these two properties
+- dYdX have an application use case that cannot (currently) guarantee these two properties
   - PBTS spec has a similar problem if expressed in terms of ABCI++ (timely predicate)
   - They filed
     - Changes that were needed for PBTS in `v0.36.x`:
