@@ -24,7 +24,7 @@ In the version of ABCI (`v0.17.0`) that existed before ABCI 1.0 and 2.0 (a.k.a. 
 the implementation of function $valid(v, bc_{h-1})$ was totally internal to CometBFT.
 Technically, the application's part of $bc_{h-1}$ was not considered by function $valid()$.
 Thus, the application had no direct say on the validity of a block,
-although it could (and still can) influence it indirectly via the best-effort ABCI call `CheckTx`.
+although it could (and still can) indirectly influence the contents of blocks via the (best-effort) ABCI call `CheckTx`.
 
 With the evolution of ABCI to ABCI 1.0 and 2.0, CometBFT's implementation of
 function $valid(v, bc_{h-1})$ now has two components:
@@ -71,7 +71,6 @@ returns via `ResponsePrepareProposal` to CometBFT in round $r_p$, height $h$,
 known as the _prepared proposal_.
 
 * Requirement 3 [`PrepareProposal`, `ProcessProposal`, coherence]: For any two correct processes $p$ and $q$
-  and any round $r_p \geq 0$,
   if $q$'s CometBFT calls `RequestProcessProposal` on $u_p$,
   $q$'s application returns _Accept_ in `ResponseProcessProposal`.
 
@@ -161,20 +160,23 @@ Consensus _validity_ property is then modified as follows:
 We now relax the relevant ABCI 1.0 requirements in the following way.
 
 * Requirement 3b [`PrepareProposal`, `ProcessProposal`, eventual coherence]:
-  There exists a round $r_s \ge 0$ of height $h$ such that,
-  for any two correct processes $p$ and $q$ and any round $r_p \geq r_s$,
+  There exists a time $ts_{h}$ for every height $h$ such that,
+  for any two correct processes $p$ and $q$ and any round $r_p$ in height $h$ starting after $ts_{h}$,
   if $q$'s CometBFT calls `RequestProcessProposal` on $u_p$,
   $q$'s application returns _Accept_ in `ResponseProcessProposal`.
 
 * The determinism-related requirements, namely requirements 4 and 5, are removed.
 
-We call round $r_s$ the coherence-stabilization round.
+We call $ts_{h}$ the coherence-stabilization time for height $h$.
 
 If we think in terms of $valid(v, bc_{h-1}, x_p)$, notice that it is the application's responsibility
 to ensure 3b, that is, the application designers need to prove that the $x_p$ values at correct processes
-are evolving in a way that eventually `ResponseProcessProposal` returns _Accept_ at some correct process.
+are evolving in a way that eventually `ResponseProcessProposal` returns _Accept_ at all correct processes
+that call `RequestPropocessPropsal` for height $h$ after $ts_{h}$.
 For instance, in Proposer-Based Timestamp, $x_p$ can be considered to be process $p$'s local clock,
 and having clocks synchronized is the mechanism ensuring eventual acceptance of a proposal.
+Finally, it is worth noting that _weak validity_ requires just one correct processes while requirement 3b
+refers to all correct processes.
 
 > [TODO: can we _tighten up_ eventual coherence?... i.e., make it even weaker?]
 >
