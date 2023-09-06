@@ -199,6 +199,8 @@ We need the following modifications (in terms of the algorithm as described in p
 >
 > &nbsp; 23b: **if** $[lockedRound_p = −1 \land (validValMatch \lor valid(v))] \lor lockedValue_p=v$ **then**
 
+The occurrences of `valid(v)` that we have removed were in a way redundant,
+so removing them does not affect the ability of the algorithm to fulfill consensus properties.
 Notice we have kept the original `valid(v)` notation, but it stands for the more general $valid(v, bc_{h-1}, x_p)$.
 These algorithmic modifications have also been made to CometBFT (on branch `main`)
 as part of issues [#1171][1171], and [#1230][1230].
