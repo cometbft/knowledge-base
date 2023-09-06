@@ -117,7 +117,7 @@ Another example is when `ProcessProposal` needs to read the system clock in orde
 In principle, if an application's implementation of `PrepareProposal` and `ProcessProposal`
 is not able to fulfill coherence and determinism requirements,
 CometBFT cannot guarantee consensus _termination_ in all runs of the system.
-As a result, the application designers must start considering both CometBFT and their application
+As a result, the application designers a priori must start considering both CometBFT and their application
 as one monolithic block, in order to reason about termination.
 We thus lose the modularity provided when fulfilling the ABCI 1.0 requirements.
 Remember that CometBFT's consensus algorithm (Tendermint) is a well-known algorithm that
@@ -130,6 +130,7 @@ So, the questions that arise are the following.
 Can we come up with a set of weaker requirements
 that applications unable to fulfill the current ABCI 1.0 requirements
 can still fulfill?
+Can we maintain modularity with these new requirements?
 Is this set of weaker requirements still strong enough to guarantee consensus _termination_?
 
 ## Solution Proposed
