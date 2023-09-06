@@ -155,7 +155,7 @@ Consensus _validity_ property is then modified as follows:
 - _weak validity_: function $valid(v, bc_{h-1}, x_p)$ has returned _true_ at least once
   by a correct process for the decided block $v$.
 
-### Eventual requirements
+### Eventual Requirements
 
 We now relax the relevant ABCI 1.0 requirements in the following way.
 
