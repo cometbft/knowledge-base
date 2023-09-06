@@ -8,7 +8,7 @@ Byzantine Fault Tolerant (BFT) Consensus is usually specified by the following p
 For every height $h$:
 
 - _agreement_: no two correct processes decide differently.
-- _validity_: function $valid(v, bc_{h-1})$, when applied to the decided block, always returns _true_.
+- _validity_: function $valid(v, s)$, when $v$ is the decided block, always returns _true_.
 - _termination_: all correct processes eventually decide.
 
 The _validity_ property refers to $valid(v, bc_{h-1})$, which is defined as a (mathematical) function
