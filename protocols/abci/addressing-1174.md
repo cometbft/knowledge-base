@@ -146,7 +146,7 @@ in the ABCI 1.0 specification.
 If we are to relax the determinism requirements on the application,
 we first need to modify function $valid()$ to be of the form $valid(v, bc_{h-1}, x_p)$,
 where $x_p$ is a variable local to process $p$.
-As $x_p$ may be different from $x_q$ for two processes $p$ and $q$, using 
+As $x_p$ may be different from $x_q$ for two processes $p$ and $q$, using
 $valid(v, bc_{h-1}, x_p)$ to implement in `PrepareProposal`  and `ProcessProposal`
 may break Requirements 3 to 5.
 
@@ -170,7 +170,7 @@ We now relax the relevant ABCI 1.0 requirements in the following way.
 We call round $r_s$ the coherence-stabilization round.
 
 If we think in terms of $valid(v, bc_{h-1}, x_p)$, notice that it is the application's responsibility
-to ensure 3b, that is, the application designers need to prove that the $x_p$ values at correct processes 
+to ensure 3b, that is, the application designers need to prove that the $x_p$ values at correct processes
 are evolving in a way that eventually `ResponseProcessProposal` returns _Accept_ at some correct process.
 For instance, in Proposer-Based Timestamp, $x_p$ can be considered to be process $p$'s local clock,
 and having clocks synchronized is the mechanism ensuring eventual acceptance of a proposal.
