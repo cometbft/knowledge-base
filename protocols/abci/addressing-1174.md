@@ -4,17 +4,16 @@
 
 ### Consensus Properties
 
+Firstly, we define $valid(v, bc_{h-1})$ a (mathematical) function
+whose output depends exclusively on its inputs: the value proposed $v$ (i.e., a block),
+and the state of the blockchain after applying the block decided at height $h-1$,
+denoted $bc_{h-1}$.
 Byzantine Fault Tolerant (BFT) Consensus is usually specified by the following properties.
 For every height $h$:
 
 - _agreement_: no two correct processes decide differently.
 - _validity_: function $valid(v, s)$, when $v$ is the decided block, always returns _true_.
 - _termination_: all correct processes eventually decide.
-
-The _validity_ property refers to $valid(v, bc_{h-1})$, which is defined as a (mathematical) function
-whose output depends exclusively on its inputs: the value proposed $v$ (i.e., a block),
-and the state of the blockchain after applying the block decided at height $h-1$,
-denoted $bc_{h-1}$.
 
 The consensus algorithm implemented in CometBFT (Tendermint) fulfills these properties.
 
@@ -43,6 +42,7 @@ With the new structure of the implementation of function $valid(v, bc_{h-1})$:
 However, the new structure of the implementation of function $valid(v, bc_{h-1})$
 may affect _termination_ of consensus, as some implementations of `ProcessProposal` might reject values
 that CometBFT's internal validity checks would otherwise accept.
+In short, $valid(v, bc_{h-1})$ is possibly more restrictive now.
 
 This document focuses on how consensus _termination_ is affected
 by the new structure of function $valid(v, bc_{h-1})$,
@@ -202,8 +202,16 @@ We need the following modifications (in terms of the algorithm as described in p
 >
 > &nbsp; 23b: **if** $[lockedRound_p = −1 \land (validValMatch \lor valid(v))] \lor lockedValue_p=v$ **then**
 
-The occurrences of `valid(v)` that we have removed were in a way redundant,
-so removing them does not affect the ability of the algorithm to fulfill consensus properties.
+- The occurrences of `valid(v)` that we have removed were in a way redundant,
+  so removing them does not affect the ability of the algorithm to fulfill consensus properties.
+- Regarding line 23, the changes have the following goals:
+  - if `v` matches the block we have as $validValue_p$ or $lockedValue_p$, we skip the call
+    to `valid(v)`. The reason is that, by the algorithm, if we have `v` as $validValue_p$ or $lockedValue_p$
+    we have received it from at least $2f + 1$ prevotes for $v$ (line 36)
+  - if the previous condition is not met, then we call `valid(v)`
+  - the modification to the conditions must _only_ affect the decision whether to call `valid(v)` or not.
+    It must not modify which part of the "if" should be taken.
+
 Notice we have kept the original `valid(v)` notation, but it stands for the more general $valid(v, bc_{h-1}, x_p)$.
 These algorithmic modifications have also been made to CometBFT (on branch `main`)
 as part of issues [#1171][1171], and [#1230][1230].
