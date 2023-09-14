@@ -55,7 +55,7 @@ so that its implementation of `PrepareProposal` and `ProcessProposal` does not c
 given the current CometBFT consensus algorithm
 (called Tendermint, and described in the [arXiv paper][arxiv]).
 In contrast to $valid(v, bc_{h-1})$, which is defined as a mathematical function used for consensus's formal specification,
-`PrepareProposal` and `ProcessProposal` are understood as implemented functions in CometBFT.
+`PrepareProposal` and `ProcessProposal` are understood as _software functions_ (namely, Go function callbacks) in CometBFT.
 We reproduce here the requirements in the ABCI 1.0 (and 2.0) specification that are relevant for this discussion.
 
 Let $p$ and $q$ be two correct processes.
@@ -146,6 +146,7 @@ in the ABCI 1.0 specification.
 If we are to relax the determinism requirements on the application,
 we first need to modify function $valid()$ to be of the form $valid(v, bc_{h-1}, x_p)$,
 where $x_p$ is a variable local to process $p$.
+Parameter $x_p$, unknown to Comet, represents non-deterministic input used by the application.
 As $x_p$ may be different from $x_q$ for two processes $p$ and $q$, using
 $valid(v, bc_{h-1}, x_p)$ to implement in `PrepareProposal`  and `ProcessProposal`
 may break Requirements 3 to 5.
