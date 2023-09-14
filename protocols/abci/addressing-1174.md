@@ -172,7 +172,7 @@ We call $ts_{h}$ the coherence-stabilization time for height $h$.
 If we think in terms of $valid(v, bc_{h-1}, x_p)$, notice that it is the application's responsibility
 to ensure 3b, that is, the application designers need to prove that the $x_p$ values at correct processes
 are evolving in a way that eventually `ResponseProcessProposal` returns _Accept_ at all correct processes
-that call `RequestPropocessPropsal` for height $h$ after $ts_{h}$.
+that call `RequestProcessProposal` for height $h$ after $ts_{h}$.
 For instance, in Proposer-Based Timestamp, $x_p$ can be considered to be process $p$'s local clock,
 and having clocks synchronized is the mechanism ensuring eventual acceptance of a proposal.
 Finally, it is worth noting that _weak validity_ requires just one correct processes while requirement 3b
