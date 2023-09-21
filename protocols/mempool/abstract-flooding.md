@@ -91,3 +91,81 @@ vertices without inbound links, such as the root `A`, represent the
 while vertices with inbound links represent the `receive <tx>` step.
 The reference time `t`, also not depicted on the graphs, is assumed to increase
 from top to bottom.
+
+## Analysis
+
+The message complexity of the transaction dissemination protocol is determined
+by the overlay network atop which the protocol is executed.
+More specifically, it depends on the size of the `peers` set of each node of
+the network, which corresponds to the `degree(p)` of each node `p` in the
+overlay network graph.
+
+A second aspect to be considered is how each node receives a transaction `tx`
+for the first time:
+
+1. if the `broadcast(tx)` clause of the pseudo-code is the first to be activated
+  for a transaction `tx`, a node `p` sends the transaction to all its `peers`.
+  The node thus sends `degree(p)` messages containing `tx`.
+  The node `A` above illustrated is an example of this case, sending
+  messages to `{B, C, D}`.
+1. if the `receive <tx>` clause of the pseudo-code is the first to be activated
+  for a transaction `tx`, a node `p` sends the transaction to all its `peers`
+  but the peer from which the `<tx>` message was received.
+  The node thus sends `degree(p) - 1` messages containing `tx`.
+  The node `B` above illustrated is an example of this case: it receives the
+  transaction from node `A` and forwards it in messages  to nodes`{C, E}`.
+
+Observe that once one of the two clauses of the pseudo-code are activated for a
+transaction `tx`, no further actions are taken if the same transaction `tx` is
+received again.
+This is illustrated in the figure above, where the highlighted nodes of the
+propagation graphs represent the activation of a clause for a node.
+
+Let `G(V, E)` be network overlay graph where the protocol is running.
+Let partition the set of nodes `V` into two groups: `Bcast` contains nodes that
+first activate `broadcast(tx)`,
+and `Recv` contains nodes that first activate `receive <tx>`.
+The number of messages exchanged by the protocol on `G` is then defined by:
+
+$$
+messages = \sum_{p \in Bcast} degree(p) + \sum_{p \in Recv} (degree(p) - 1)
+= \sum_{p \in V} degree(p) - |Recv|
+= 2|E| - |Recv|
+$$
+
+The sum of the degrees of all nodes in a graph is equal to two times the number
+of edges in the graph (`|E|`), as each edge counts for the degree of both its ends.
+The first part of the equation indicates that, in general, every link of the
+overlay network graph is traversed by two messages carrying `tx`, one on each
+direction.
+The exception for this role are the links through which a node in the `Recv`
+set receives the message carrying `tx` for the first time.
+Since nodes receiving a transaction from a peer do not send the same message
+back to this peer, those edges are only traversed by a single message carrying
+the transaction `tx`.
+
+The above equation is valid for the propagation graphs above depicted.
+The overlay network graph contains $5$ nodes and $6$ links between nodes.
+Every node except `A` is on the `Recv` set, which has size $4$.
+The number of links and of messages exchanged in the two illustrated
+propagation graphs is therefore $2*6 - 4 = 8$.
+
+The above equation uses the size of the set `Recv` as parameter.
+However, in most executions and networks a single node, or at least few nodes,
+should start the broadcast of a transaction via `broadcast(tx)`.
+This means that most nodes are in the `Recv` set,
+namely $|Recv| \approx |V|$, from which the equation becomes:
+
+$$
+messages = 2|E| - |V| + |Bcast| \approx 2|E| - |V|
+$$
+
+For reference, in order to propagate a transaction in any connected graph with
+`|V|` nodes, at least `|V| - 1` messages have to be exchanged.
+The rationale is that every node in `V`, except the node that has initiated the
+broadcast of the transaction, receives a single message carrying the transaction.
+This message complexity is achieved by the transaction flooding protocol
+provided that is run in an overlay network which is a _tree graph_.
+A tree is a connected graph with no loops, which has `|E| = |V| - 1`,
+thus leading to this optimal message complexity, which means no redundancy at
+all, namely no node receives a transaction more than once.
