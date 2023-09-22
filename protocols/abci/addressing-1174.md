@@ -236,6 +236,23 @@ Notice we have kept the original `valid(v)` notation, but it stands for the more
 These algorithmic modifications have also been made to CometBFT (on branch `main`)
 as part of issues [#1171][1171], and [#1230][1230].
 
+## On crash recovery
+
+Applications that opt for eventual coherence because their `ProcessProposal` implementation can be non-deterministic,
+will have an additional problem for recovering nodes.
+When replaying messages for the unfinished consensus, they may run `ProcessProposal` twice for the same value and round:
+one before the crash and one after the crash.
+Since `ProcessProposal` can now be non-deterministic, it is possible that both executions produce different outputs.
+
+This problem is analogous to the one already identified for `PrepareProposal`, which can always be non-deterministic,
+and is captured in [#1035][1035].
+So, similarly to `PrepareProposal`, the current CometBFT implementation of the `PrivValidator`
+includes a double-signing protection mechanism that will prevent the recovering node from sending conflicting messages
+for the same height, round, and step.
+This mechanism will drop any prevote message resulting from `ProcessProposal` that doesn't match a previously sent
+prevote for the same height and round.
+Until [#1035][1035] is addressed, this is considered a good enough solution in our implementation.
+
 ## Conclusion
 
 This document has explored the possibility of relaxing the coherence and determinism properties
@@ -259,3 +276,4 @@ We leave this as future work.
 [arxiv]: https://arxiv.org/abs/1807.04938
 [1171]: https://github.com/cometbft/cometbft/issues/1171
 [1230]: https://github.com/cometbft/cometbft/issues/1230
+[1035]: https://github.com/cometbft/cometbft/issues/1035
