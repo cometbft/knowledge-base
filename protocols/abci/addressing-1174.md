@@ -2,6 +2,22 @@
 
 ## Context
 
+The [ABCI 1.0 specification][abci-spec] imposes a set of new requirements on the application
+ so that its implementation of `PrepareProposal` and `ProcessProposal` does not compromise _termination_ of consensus, given the current CometBFT consensus algorithm
+ (called Tendermint, and described in the [arXiv paper][arxiv]).
+ 
+ The requirements are good enough for most applications using ABCI 1.0 or 2.0.
+ They are simple to understand and relatively easy to check whether an application's
+ implementation of `PrepareProposal` and `ProcessProposal` fulfills them, as long as these functions are implemented as mathematical functions, that is, as pure functions of their inputs.
+ All applications that are able to enforce these properties do not need to reason about
+ the internals of the consensus implementation: they can consider it as a black box.
+ This is the most desirable situation in terms of modularity between CometBFT and the application.
+ 
+ However, `PrepareProposal` and `ProcessProposal` MAY also use other input in their
+ implementation and CometBFT will still guarantee consensus termination, __as long as
+these implementations still ensure the requirements__.
+
+In this document we discuss the case in which the requirements are not satisfied, and propose weaker requirements that may be fulfilled instead.
 ### Consensus Properties
 
 Firstly, we define $valid(v, bc_{h-1})$ a (mathematical) function
