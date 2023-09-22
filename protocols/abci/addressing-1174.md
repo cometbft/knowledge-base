@@ -224,8 +224,10 @@ We need the following modifications (in terms of the algorithm as described in p
 >
 > &nbsp; 23b: **if** $[lockedRound_p = −1 \land (validValMatch \lor valid(v))] \lor lockedValue_p=v$ **then**
 
-- The occurrences of `valid(v)` that we have removed were in a way redundant,
-  so removing them does not affect the ability of the algorithm to fulfill consensus properties.
+- If we consider the new _weak validity_ property,
+  the occurrences of `valid(v)` that we removed had become redundant,
+  so removing them does not affect the ability of the algorithm to fulfill consensus properties
+  (replacing _validity_ by _weak validity_).
 - Regarding line 23, the changes have the following goals:
   - If `v` matches the block we have as $validValue_p$ or $lockedValue_p$, we skip the call
     to `valid(v)`.
