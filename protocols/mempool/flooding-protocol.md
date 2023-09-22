@@ -1,5 +1,12 @@
-# Transaction flooding
+# Transaction flooding protocol
 
+This document presents the abstract protocol adopted by CometBFT's mempool to
+disseminate transactions in a network.
+The presented transaction flooding protocol abstracts the peculiarities of the
+mempool to focus on the approach for propagating transactions in a peer-to-peer
+network, as a reliable broadcast protocol.
+The goal is to analyse the message complexity for propagating transactions in
+the mempool protocol.
 
 ## Pseudo-code
 
