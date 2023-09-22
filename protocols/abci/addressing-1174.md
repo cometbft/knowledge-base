@@ -20,48 +20,48 @@ these implementations still ensure the requirements__.
 In this document we discuss the case in which the requirements are not satisfied, and propose weaker requirements that may be fulfilled instead.
 ### Consensus Properties
 
-Firstly, we define $valid(v, bc_{h-1})$ a (mathematical) function
-whose output depends exclusively on its inputs: the value proposed $v$ (i.e., a block),
-and the state of the blockchain after applying the block decided at height $h-1$,
-denoted $bc_{h-1}$.
+Firstly, we define $valid(v, s)$ a function
+whose output depends exclusively on its inputs, i.e., a mathematical function.
+The inputs are the value proposed $v$ (i.e., a block)
+and a state $s$ of the blockchain.
 Byzantine Fault Tolerant (BFT) Consensus is usually specified by the following properties.
-For every height $h$:
+For every height $h$ and $s_{h-1}$, where $s_{h-1} is the state of the blockchain after applying the block decided in height $h$:
 
-- _agreement_: no two correct processes decide differently.
-- _validity_: function $valid(v, s)$, when $v$ is the decided block, always returns _true_.
-- _termination_: all correct processes eventually decide.
+- _agreement_: no two correct processes decide differently in $h$.
+- _validity_: function $valid(v, s_{h-1})$, when $v$ is the block in $h$, always returns _true_.
+- _termination_: all correct processes eventually decide in $h$.
 
 The consensus algorithm implemented in CometBFT (Tendermint) fulfills these properties.
 
 ### ABCI interface
 
 In the version of ABCI (`v0.17.0`) that existed before ABCI 1.0 and 2.0 (a.k.a. ABCI++),
-the implementation of function $valid(v, bc_{h-1})$ was totally internal to CometBFT.
-Technically, the application's part of $bc_{h-1}$ was not considered by function $valid()$.
+the implementation of function $valid(v, s)$ was totally internal to CometBFT.
+Technically, the application's part of the state $s_{h-1}$ was not considered by function $valid()$.
 Thus, the application had no direct say on the validity of a block,
 although it could (and still can) indirectly influence the contents of blocks via the (best-effort) ABCI call `CheckTx`.
 
 With the evolution of ABCI to ABCI 1.0 and 2.0, CometBFT's implementation of
-function $valid(v, bc_{h-1})$ now has two components:
+function $valid(v, s)$ now has two components:
 
 - the validity checks performed directly by CometBFT on blocks
   (block format, hashes, etc; the same as in ABCI `v0.17.0`)
 - the validity checks that now the application can perform as part of `ProcessProposal`;
-  i.e., `ProcessProposal` is now part of $valid(v, bc_{h-1})$
+  i.e., `ProcessProposal` is now part of $valid(v, s)$ and may use the application part of $s$ in validating $v$.
 
-With the new structure of the implementation of function $valid(v, bc_{h-1})$:
+With the new structure of the implementation of function $valid(v, s)$:
 
 - consensus _agreement_ is not affected and all processes are still required to agree on the same value
 - the consensus _validity_ property is not affected since we are changing the
-  internals of function $valid(v, bc_{h-1})$; consensus _validity_ just requires this function to be true
+  internals of function $valid(v, s)$; consensus _validity_ just requires this function to be true
 
-However, the new structure of the implementation of function $valid(v, bc_{h-1})$
+However, the new structure of the implementation of function $valid(v, s)$
 may affect _termination_ of consensus, as some implementations of `ProcessProposal` might reject values
 that CometBFT's internal validity checks would otherwise accept.
-In short, $valid(v, bc_{h-1})$ is possibly more restrictive now.
+In short, $valid(v, s)$ is possibly more restrictive now.
 
 This document focuses on how consensus _termination_ is affected
-by the new structure of function $valid(v, bc_{h-1})$,
+by the new structure of function $valid(v, s)$,
 in particular, the different implementations of `ProcessProposal`.
 
 ### ABCI 1.0 (and 2.0) Specification
@@ -70,14 +70,14 @@ The [ABCI 1.0 specification][abci-spec] imposes a set of new requirements on the
 so that its implementation of `PrepareProposal` and `ProcessProposal` does not compromise _termination_ of consensus,
 given the current CometBFT consensus algorithm
 (called Tendermint, and described in the [arXiv paper][arxiv]).
-In contrast to $valid(v, bc_{h-1})$, which is defined as a mathematical function used for consensus's formal specification,
+In contrast to $valid(v, s)$, which is defined as a mathematical function used for consensus's formal specification,
 `PrepareProposal` and `ProcessProposal` are understood as _software functions_ (namely, Go function callbacks) in CometBFT.
 We reproduce here the requirements in the ABCI 1.0 (and 2.0) specification that are relevant for this discussion.
 
 Let $p$ and $q$ be two correct processes.
 Let $r_p$ be a round of consensus at height $h$ where $p$ is the proposer.
 Let $s_{p,h-1}$ be $p$'s application's state committed for height $h-1$.
-In other words, $s_{p,h-1}$ is $p$'s view of $bc_{h-1}$.
+In other words, $s_{p,h-1}$ is $p$'s view of $s_{h-1}$.
 Let $v_p$ be the block that $p$'s CometBFT passes
 on to the application
 via `RequestPrepareProposal` as proposer of round $r_p$, height $h$,
@@ -113,12 +113,12 @@ This is the most desirable situation in terms of modularity between CometBFT and
 
 The easiest (and thus canonical) way to ensure these requirements is to make sure
 that `PrepareProposal` only prepares blocks $v$ that satisfy (mathematical) function `valid(v, bc(h-1))`,
-and `ProcessProposal` just evaluates the same function.
+including the validation performed by correct processes in `ProcessProposal`.
 However, `PrepareProposal` and `ProcessProposal` MAY also use other input in their
-implementation, but a priori, CometBFT only guarantees consensus termination
-if these implementations still ensure the requirements.
+implementation and CometBFT will still guarantee consensus termination, __as long as
+these implementations still ensure the requirements__.
 
-## Problem Statement
+## Breaking Determinism/Coherence requirements
 
 This document is dealing with the case when an application cannot guarantee
 the coherence and/or determinism requirements as stated in the ABCI 1.0 specification.
@@ -129,17 +129,20 @@ different processes during the same height.
 Another example is when `ProcessProposal` needs to read the system clock in order to perform its checks
 (e.g. Proposer-Based Timestamp when expressed as an ABCI 1.0 application).
 
+### Problem Statement
+
 In principle, if an application's implementation of `PrepareProposal` and `ProcessProposal`
 is not able to fulfill coherence and determinism requirements,
 CometBFT cannot guarantee consensus _termination_ in all runs of the system.
-As a result, the application designers a priori must start considering both CometBFT and their application
-as one monolithic block, in order to reason about termination.
-We thus lose the modularity provided when fulfilling the ABCI 1.0 requirements.
-Remember that CometBFT's consensus algorithm (Tendermint) is a well-known algorithm that
-has been studied, reviewed, formally analyzed, model-checked, etc.
-The combination of CometBFT and an arbitrary application as one single algorithm cannot
-leverage that extensive body of research applied to the Tendermint algorithm.
-This situation is risky and undesirable.
+> ⚠️ Warning!!! ⚠️ 
+> If they decide to follow this road, the application designers a priori must start considering both CometBFT and their application
+> as one monolithic block, in order to reason about termination.
+> We thus lose the modularity provided when fulfilling the ABCI 1.0 requirements.
+> Remember that CometBFT's consensus algorithm (Tendermint) is a well-known algorithm that
+> has been studied, reviewed, formally analyzed, model-checked, etc.
+> The combination of CometBFT and an arbitrary application as one single algorithm cannot
+> leverage that extensive body of research applied to the Tendermint algorithm.
+> This situation is risky and undesirable.
 
 So, the questions that arise are the following.
 Can we come up with a set of weaker requirements
