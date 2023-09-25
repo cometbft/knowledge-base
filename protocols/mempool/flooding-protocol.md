@@ -11,13 +11,13 @@ the mempool protocol.
 ## Pseudo-code
 
 The pseudo-code below represents a simple reliable broadcast protocol.
-The `brodcast(tx)` primitive is the input of the protocol; it is invoked by
+The `brodcast(tx)` primitive is the entry point of the protocol; it is invoked by
 clients to initiate the broadcast of a transaction `tx`.
 The `deliver(tx)` primitive is the output of the protocol; it delivers
 received transactions, which are added to the mempool.
 
 ```go
-var peers // peers to which the node is connected, dynamic set
+var peers // set of peers to which the node is connected
 var seen  // set of transactions already seen, initially empty
 
 upon brodcast(tx):
@@ -65,7 +65,7 @@ a directed graph with sets of vertices and links defined as follows:
 - Vertices are tuples `(p, s, t)` and represent the execution at node `p` of
   the step `s` of the protocol at a reference time `t`.
   Steps correspond to the pseudo-code `broadcast(tx)` or `receive <tx>` upon clauses.
-- Links represent the sending of a message between to nodes and correspond to
+- Links represent the sending of a message between two nodes and correspond to
   pseudo-code `send <tx>` primitives.
   A link connects a `broadcast(tx)` or `receive <tx>` step at a node `p` to a
   `receive <tx>` step at node `q` when the protocol defines that `p` at that
@@ -128,8 +128,8 @@ received again.
 This is illustrated in the figure above, where the highlighted nodes of the
 propagation graphs represent the activation of a clause for a node.
 
-Let `G(V, E)` be network overlay graph where the protocol is running.
-Let partition the set of nodes `V` into two groups: `Bcast` contains nodes that
+Let `G(V, E)` be the network overlay graph where the protocol is running.
+Lets partition the set of nodes `V` into two groups: `Bcast` contains nodes that
 first activate `broadcast(tx)`,
 and `Recv` contains nodes that first activate `receive <tx>`.
 The number of messages exchanged by the protocol on `G` is then defined by:
