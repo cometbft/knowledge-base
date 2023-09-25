@@ -164,7 +164,7 @@ This means that most nodes are in the `Recv` set,
 namely $|Recv| \approx |V|$, from which the equation becomes:
 
 $$
-messages = 2|E| - |V| + |Bcast| \approx 2|E| - |V|
+messages \approx 2|E| - |V|
 $$
 
 For reference, in order to propagate a transaction in any connected graph with
