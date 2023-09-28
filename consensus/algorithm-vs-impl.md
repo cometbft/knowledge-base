@@ -31,6 +31,7 @@ not expected to be covered by this document:
   complex protocol in the implementation
 - The Application-Blockchain interface (ABCI) and the interactions with the
   replicated application in general
+- The proposer election algorithm, which is assumed to be an external module
 
 ## Summary
 
@@ -52,15 +53,71 @@ A non-comprehensive and evolving list of divergences between the algorithm and t
   `PRECOMMIT` votes as possible for a decided block.
   This operation includes the `timeout_commit` logic and of the `NewHeight`
   round step.
+- [Validators set](#validators-set): the algorithm assumes a fixed number of
+  processes with uniform voting power. In the implementation, the set of voting
+  processes (validators) and their voting power are dynamic.
  
 Potential divergences and specificities to be considered: 
 
 - Locked value as proposed value (i.e., deciding without a `PROPOSAL` message)
-- Empty blocks handling (except if it can be encapused on the `getValue()` logic)
+- Empty blocks handling (except if it can be encapsulated on the `getValue()` logic)
 
 ## Block propagation
 
-TODO:
+The algorithm considers three message types:
+
+- A `PROPOSAL` message carries the proposed value `v`, a _full_ value
+- `PREVOTE` and `PRECOMMIT` messages carry a reference `id(v)` to the
+  voted (full) value `v`
+
+In the implementation, a proposed value is a block to be appended to the
+blockchain, more specifically:
+
+- The proposed value `v` is always a `Block`
+- The reference for a proposed value `id(v)` is a `BlockID`
+
+The implementation considers a different set of message types:
+
+- `Proposal` message: similar to the algorithm's `PROPOSAL` message, with the
+  difference that it carries a `BlockID` (equivalent to `id(v)`), not the full
+  proposed value (equivalent to `v`)
+- `BlockPart` messages: carry the full proposed value (equivalent to `v`),
+  split into multiple `Part`s of a `Block`. Together with the `Proposal`
+  message, plays the role of the algorithm's `PROPOSAL` message.
+- `Vote` messages: corresponds to the algorithm's `PREVOTE` and
+  `PRECOMMIT` messages, carries a `BlockID`
+
+In other words, the full proposed `Block` is not carried by the `Proposal`
+message.
+The `Proposal` message carries a `BlockID` while a variable number of
+`BlockPart` messages are responsible for transporting the full proposed
+`Block`, uniquely identified by the `BlockID` carried by the `Proposal`
+message.
+
+The `BlockID` type has two roles in the consensus implementation:
+
+- It uniquely identifies a `Block`, by storing its hash
+- It carries the root of a Merkle tree used to propagate the `Block` using
+  multiple `BlockPart` messages
+
+The consensus implementation thus implements the `propose` step as follows:
+
+1. A `Proposal` message is received and a Merkle tree is initialized from the proposed `BlockID`
+1. A number of `BlockPart` messages are received, and the corresponding block
+   `Part`s are added to the initialized Merkle Tree; the full proposed block is
+   being progressively computed.
+1. Once all `Part`s of a `Block` are received, and validated against the Merkle
+   tree root, the `ProposalBlock` field is computed so that to store the
+   proposed `Block`.
+
+As a result, the combination of the `Proposal` and `ProposalBlock` block
+implementation fields corresponds to receiving of a `PROPOSAL` message in the
+algorithm, proposing a value `v == ProposalBlock`.
+
+References:
+
+- [tendermint/tendermint#7946](https://github.com/tendermint/tendermint/issues/7946)
+  Treat proposal and block parts explicitly in the spec 
 
 ## Equivocating proposals
 
@@ -78,5 +135,9 @@ the method for keeping track of votes.
 TODO:
 
 ## Last commit
+
+TODO:
+
+## Validators set
 
 TODO:
