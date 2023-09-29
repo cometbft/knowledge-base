@@ -28,4 +28,4 @@ CometBFT communicates with the (SMR) application via ABCI:
       - [#1231](https://github.com/cometbft/cometbft/issues/1231) - DONE
     - [#1174](https://github.com/cometbft/cometbft/issues/1174)
       - It is a proposal to handle non-determinism in `ProcessProposal`
-      - We have discussed internally, here's the resulting writeup: [[abci/addressing-1174]]
+      - We have discussed internally, the result is [RFC105](https://github.com/cometbft/cometbft/blob/main/docs/rfc/rfc-105-non-det-process-proposal.md)
