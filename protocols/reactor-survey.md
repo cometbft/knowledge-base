@@ -40,7 +40,7 @@ In order  to make sure that we can help a peer to make progress, we need to be s
 
 
 > The previous properties can be used to solve a local version of [[CM-REQ-CONS-GOSSIP.0]], that is, between neighbors. However, [[CM-REQ-CONS-GOSSIP.0]] is global, that is, whoever emits *m*, potentially we require that *m* is received by all correct processes in a potentially dynamic distributed system:
-> - nodes may join an leave physically (connection)
+> - nodes may join and leave physically (connection)
 > - validators join and leave logically (the validator set)
 
 > This translates into **global requirements** for the p2p layer.
@@ -57,7 +57,7 @@ We say a period is good if
 1. the period is sufficiently long (TODO: might need to clarify; sufficiently long to achieve consensus depending on the message delays)
 1. the network is good; cf. [CM-REQ-CR+P2P-CONNECT.0]  
 
-For each consensus instance (each block) we need the occurence of one good period. 
+For each consensus instance (each block) we need the occurrence of one good period. 
 > As p2p does not know about consensus instances
 
 In other words, at each point in time, eventually there will be a good period. (infinitely many good periods)
@@ -73,14 +73,14 @@ The p2p system ensures
 #### [CM-REQ-CR+P2P-OPENNESS.0]
 The p2p system ensures that at any time, new nodes can join the network. (In other words, at all times, there must be nodes that accept new connections)
 
-> This doesn't mean that all nodes must accept new onnections. It also doesn't mean that a node must accept new connections at all times. 
+> This doesn't mean that all nodes must accept new connections. It also doesn't mean that a node must accept new connections at all times. 
 > The above property derives from the requirement that new validators can join consensus. In order to do so, they must first be connected.
 
-> TODO: what do we need to say about new nodes joining and existing nodes resyncing. -> requirement to establish new connections needa to be captured.
+> TODO: what do we need to say about new nodes joining and existing nodes resyncing. -> requirement to establish new connections need to be captured.
 
 Since the systems we are building are decentralized and distributed, the global requirements can only be ensured by local actions of the distributed nodes. For instance, openness has been ensured by distinguishing inbound and outbound connections, and making sure that there are always nodes with open inbound connections.
 
-> The consensus properties and the consensus algorithm are clearly specified in the arXiv paper. In the this section we could thus start our discussions from the consensus gossip property that provides a clear abstraction. As this level of detail of specification is missing for the other reactors, we need to survey them a bit in the following in more detail
+> The consensus properties and the consensus algorithm are clearly specified in the arXiv paper. In this section we could thus start our discussions from the consensus gossip property that provides a clear abstraction. As this level of detail of specification is missing for the other reactors, we need to survey them a bit in the following in more detail
 
 ## Mempool
 
@@ -143,7 +143,7 @@ The mempool then returns the longest **prefix** of its local list of pending
 transactions that respects the limits established by the consensus protocol. 
 
   > As a result of these two properties, once a transaction is known to all validators (present and future), it 
-cannot be overtaken by infinitely many transaction that arrived in the system later (there
+cannot be overtaken by infinitely many transactions that arrived in the system later (there
 is still some possible overtaking due to faulty proposers); cf. no starvation.
 
 
@@ -167,7 +167,7 @@ We arrive at the requirement on the mempool:
 
 #### [CM-PROTOCOL-MR-COMM.0]
 
-Gossiping is done by remembering for each peer which was the last element in the local list of transaction that was sent to a peer (there are condition where the pointer to the last element is reset). We then send transactions after this last element to the peer. 
+Gossiping is done by remembering for each peer which was the last element in the local list of transactions that was sent to a peer (there are condition where the pointer to the last element is reset). We then send transactions after this last element to the peer. 
 
 > TODO: seems best effort send, i.e., no ACKs, no reliable communication (e.g., full messages queues). We should clarify.
 
@@ -226,9 +226,9 @@ Blocksync and Statesync are mainly request/response protocols. The peers act as 
 
 ### Requirements on P2P
 #### [CM-PROTOCOL-ER-COMM.0]
-- In princple both syncing reactors need one stable and timely connection to at least one correct full node.
+- In principle both syncing reactors need one stable and timely connection to at least one correct full node.
 
-> We could define something like blocksyncing to the neighborhood, and then depending on how well the neighborhood is synced, blocksync will sync to the top of the chain. The the sync reactors just need one good connection. 
+> We could define something like blocksyncing to the neighborhood, and then depending on how well the neighborhood is synced, blocksync will sync to the top of the chain. The sync reactors just need one good connection. 
 
 In practice, the correct full nodes we need the connection to
 1. needs be synchronized with the blockchain
