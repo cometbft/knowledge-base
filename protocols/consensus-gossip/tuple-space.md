@@ -6,7 +6,7 @@ If this is not the case, please refer to the [Consensus specification](../).
 
 Three kinds of messages are exchanged in the Tendermint algorithm: `PROPOSAL`, `PRE-VOTE`, and `PRE-COMMIT`.
 The algorithm progresses when certain conditions are satisfied over the set of messages received.
-For example, in order do decide on a value `v`, the set must include a `PROPOSAL` for `v` and `PRE-COMMIT` for the same `v` from more than two thirds of the validators for the same round.
+For example, in order to decide on a value `v`, the set must include a `PROPOSAL` for `v` and `PRE-COMMIT` for the same `v` from more than two thirds of the validators for the same round.
 Since processes are subject to failures, correct processes cannot wait indefinitely for messages since the sender may be faulty.
 Hence, processes execute in rounds in which they wait for conditions to be met for some time but, if they timeout, send negative messages that will lead to new rounds.
 
@@ -45,7 +45,7 @@ To propose a value, the proposer adds it to the tuple space, and to vote for a p
 Each tuple is signed by the validator adding it to the tuple space.
 Since each tuple includes the height, round, there is no room for forgery (and any attempt to add differing entries for the same heigh and round by the same validator will be seen as evidence of misbehavior).[^todo1]
 
-Because nodes are are part of an asynchronous distributed system, individual nodes can only maintain approximations of the tuple space, to which they try to converge.
+Because nodes are part of an asynchronous distributed system, individual nodes can only maintain approximations of the tuple space, to which they try to converge.
 There are essentially two ways of making the tuple space converge.
 
 - **Approach One**: nodes broadcast all the updates they want to perform to all nodes, including themselves.
