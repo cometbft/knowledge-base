@@ -66,9 +66,37 @@ The `Ref` column refers to the line of the pseudo-code where the events can be f
 | From | To | Event | Action | Ref |
 |-------|-----------|-----------|--------|-----|
 | Unstarted | Round(0) | `start` | send `start` to `Round(0)` | L10, L54 |
-| Round(r) | Decided | `decide(v)` | send `start` to `Height(h+1)` | L49 |
+| Round(r) | Decided | `decide(v)` | send `kill` to every `Round(r)` <br> send `start` to `Height(h+1)` | L49 |
 | Round(r) | Round(r+1) | `next_round(r+1)` | send `start` to `Round(r+1)` | L65 |
 | Round(r) | Round(r') | `next_round(r')` | send `start` to `Round(r')` | L55 |
+
+A height `h` consists of multiple rounds of consensus, always starting from
+round `0`.
+The `Unstarted` state is intented to store events and messages regarding height `h`
+before its execution is actually started.
+
+Each round `r` of consensus is represented by a state machine `Round(r)`.
+There is a single round _in progress_ at a time, which is always the last
+`Round(r)` state machine to receive the `start` command.
+
+The height is concluded when a decision is reached in _any_ of its rounds.
+The `Decided` state is intented to represent that a decision has been reached,
+while it also allows storing the summary of a decided height.
+
+Once the node moves to the `Decided` state of a height, the operation of
+_every_ round `Round(r)` should be concluded.
+The representation of this transition needs to be improved, for now it is
+considered that the corresponding `Round(r)` state machines are killed.
+
+A round `r` may not succeed on reaching a decision.
+In this case, the successive round `r+1` is started.
+The uncessful `Round(r)` state machine is not killed at this point, as messages
+referring to that round can still be required for the operation of future rounds.
+
+While in a round `r`, a node may realize that several nodes are already in a
+future round `r' > r`.
+When this happens, the node switches to round `r'`, skipping both the current
+and the possible intermediate rounds.
 
 <!---
 
