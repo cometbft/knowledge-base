@@ -9,7 +9,9 @@ identified by natural numbers `r`.
 Each round consists of essentially three **round steps**:
 `propose`, `prevote`, and `precommit`.
 
-## Height state-machine
+<!---
+
+## Multi-Height state-machine
 
 Proposed states for the state machine for each height `h`:
 
@@ -46,48 +48,38 @@ This transaction should initialize the consensus variables.
 The height of consensus is decided.
 The node is ready to move to the next height.
 
-## Current height state machine
+-->
 
-The state machine for the `Started` state of a height `h`, which is the current's node height `hp`:
+## Height state machine
+
+State machine `Height(r)` representing the operation of a height `h` of consensus.
+
+The considered set of states are:
 
 - NewHeight
   - Initial state
 - Round `r`, with `r` being a natural number
 
-### Transition `NewHeight` -> `Round(0)`
+The table below summarizes the state transitions between the multiple `Round(r)` state machines.
+The `Ref` column refers to the line of the pseudo-code where the events can be found.
 
-```
-52:   hp ← hp+1
-53:   reset lockedRoundp , lockedV aluep , validRoundp and validV aluep to initial values and empty message log
-54:   StartRound(0)
-```
+| State | NextState | Condition | Action | Ref |
+|-------|-----------|-----------|--------|-----|
+| NewHeight | Round(0) | | | L10, L54 |
+| Round(r) | Decided | `⟨PROPOSAL, h, r, v, *⟩` and `2f + 1 ⟨PRECOMMIT, h, r, id(v)⟩` | decide `v`  | L49 |
+| Round(r) | Round(r) | `2f + 1 ⟨PRECOMMIT, h, r, *⟩` for the first time | schedule `TimeoutPrecommit(h, r)` | L47 |
+| Round(r) | Round(r+1) | `TimeoutPrecommit(h, r)` | failed round | L65 |
+| Round(r) | Round(r') | `2f + 1 ⟨PREVOTE, h, r', *, *⟩` with `r' > r` | round skipping | L55 |
+| Round(r) | Round(r') | `2f + 1 ⟨PRECOMMIT, h, r', *, *⟩` with `r' > r` | round skipping | L55 |
 
-### Transition `Round(r)` -> `Round(r+1)`: failed round
-
-The current round of the node `roundp` has not succeeded,
-so that it starts the next round `roundp + 1`:
-
-```
-65: Function OnTimeoutPrecommit(height, round):
-66:   if height = hp ∧ round = roundp then
-67:      StartRound(roundp + 1)
-```
-
-### Transition `Round(r)` -> `Round(r')`: round skipping
-
-The node receives a number of messages from a future round `round > roundp`,
-so that it skips to that round:
-
-```
-55: upon f + 1 ⟨∗, hp, round, ∗, ∗⟩ with round > roundp do
-56:   StartRound(round)
-```
+<!---
 
 > This is not really implemented like that:
 >  - We require 2f+1 PREVOTEs or PRECOMMITs, instead of f+1 messages
 >  - We only skip to the next round `roundp + 1`
 
-## Round state-machine
+
+## Multi-Round state-machine
 
 Proposed states for the state machine for each rond `r` of a height `h`:
 
@@ -104,55 +96,31 @@ Proposed states for the state machine for each rond `r` of a height `h`:
 
 Those states are part of the `Started` state of `Round(r)`.
 
-## Current Round state-machine
+-->
 
-Proposed states for the state machine for the current round `roundp` of the current height `hp`:
+## Round state-machine
 
-- NewRound
-- Propose
-- Prevote
-- Precommit
+State machine `Round(r)` representing the operation of a round `r` of consensus from height `h`.
 
-### Transition `NewRound` -> `Propose`
+The considered set of states are:
 
-If the node is the round's proposer, it broadcasts a `PROPOSAL` message.
+- `newRound` (not represented in the pseudo-code)
+- `propose`
+- `prevote`
+- `precommit`
 
-```
-14:   if proposer(hp, roundp) = p then 
-(...)
-19:     broadcast ⟨PROPOSAL, hp, roundp, proposal, validRoundp⟩
-20:   else
-21:     schedule OnTimeoutPropose(hp,roundp) to be executed after timeoutPropose(roundp)
-```
+The table below summarizes the state transitions within `Round(r)`.
+The `Ref` column refers to the line of the pseudo-code where the events can be found.
 
-### Transition `Propose` -> `Prevote`
-
-The node broadcasts a `PREVOTE` vote message for the current round.
-If the `PROPOSAL` for the round is properly received, possibly accompanied by a
-quorum of associated `PREVOTE` votes, it is valid and it can be accepted by the
-node, it votes for the proposed value ID.
-Otherwise, it votes for `nil`:
-
-```
-22: upon ⟨PROPOSAL, hp, roundp, v, −1⟩ from proposer(hp, roundp) while stepp = propose do
-
-28: upon ⟨PROPOSAL, hp, roundp, v, vr⟩ from proposer(hp, roundp) AND 2f + 1 ⟨PREVOTE, hp, vr, id(v)⟩ while stepp = propose∧(vr ≥ 0∧vr < roundp) do
-
-57: Function OnTimeoutPropose(height, round):
-58:    if height = hp ∧ round = roundp ∧ stepp = propose
-```
-
-### Transition `prevote` -> `precommit`
-
-The node broadcasts a `PRECOMMIT` vote message for the current round.
-If the `PROPOSAL` for the round is received, accompanied by a quorum of
-associated `PREVOTE` votes for the current round,
-the node votes for the proposed value.
-Otherwise, it votes for `nil`.
-
-```
-36: upon ⟨PROPOSAL, hp, roundp, v, ∗⟩ from proposer(hp, roundp) AND 2f + 1 ⟨PREVOTE, hp, roundp, id(v)⟩ while valid(v) ∧ stepp ≥ prevote for the first time do
-
-61: Function OnTimeoutPrevote(height, round) :
-62:   if height = hp ∧ round = roundp ∧ stepp = prevote then
-```
+| State | NextState | Condition | Action | Ref |
+|-------|-----------|-----------|--------|-----|
+| newRound | propose | `proposer(h, r) = p` | broadcast `⟨PROPOSAL, h, r, proposal, validRound⟩` | L19 |
+| newRound | propose | `proposer(h, r) != p` (optional) | schedule `TimeoutPropose(h, r)` | L21 |
+| propose | prevote | `⟨PROPOSAL, h, r, v, −1⟩` | broadcast `⟨PREVOTE, h, r, {id(v), nil}⟩` | L22 |
+| propose | prevote | `⟨PROPOSAL, h, r, v, vr⟩` and `2f + 1 ⟨PREVOTE, h, vr, id(v)⟩` | broadcast `⟨PREVOTE, h, r, {id(v), nil}⟩` | L28 |
+| propose | prevote | `TimeoutPropose(h, r)` | broadcast `⟨PREVOTE, h, r, nil⟩` | L57 |
+| prevote  | prevote   | `2f + 1 ⟨PREVOTE, h, r, *⟩` for the first time | schedule `TimeoutPrevote(h, r)⟩` | L34  |
+| prevote  | precommit | `⟨PROPOSAL, h, r, v, ∗⟩` and  `2f + 1 ⟨PREVOTE, h, r, id(v)⟩` for the first time | broadcast `⟨PRECOMMIT, h, r, id(v)⟩` <br> update `lockedValue, lockedRound, validValue, validRound` | L36 |
+| prevote  | precommit | `2f + 1 ⟨PREVOTE, h, r, nil⟩` | broadcast `⟨PRECOMMIT, h, r, nil⟩` | L44 |
+| prevote  | precommit | `TimeoutPrevote(h, r)` | broadcast `⟨PRECOMMIT, h, r, nil⟩` | L61 |
+| precommit  | precommit | `⟨PROPOSAL, h, r, v, ∗⟩` and  `2f + 1 ⟨PREVOTE, h, r, id(v)⟩` for the first time | update `validValue, validRound` | L36 |
