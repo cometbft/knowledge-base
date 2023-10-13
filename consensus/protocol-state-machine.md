@@ -52,25 +52,23 @@ The node is ready to move to the next height.
 
 ## Height state machine
 
-State machine `Height(r)` representing the operation of a height `h` of consensus.
+State machine `Height(h)` representing the operation of a height `h` of consensus.
 
 The considered set of states are:
 
-- NewHeight
-  - Initial state
-- Round `r`, with `r` being a natural number
+- Unstarted
+- Round(r), where `r` is a natural number
+- Decided
 
-The table below summarizes the state transitions between the multiple `Round(r)` state machines.
+The table below summarizes the state transitions in the `Height(h)` state machine.
 The `Ref` column refers to the line of the pseudo-code where the events can be found.
 
-| State | NextState | Condition | Action | Ref |
+| From | To | Event | Action | Ref |
 |-------|-----------|-----------|--------|-----|
-| NewHeight | Round(0) | | | L10, L54 |
-| Round(r) | Decided | `⟨PROPOSAL, h, r, v, *⟩` and `2f + 1 ⟨PRECOMMIT, h, r, id(v)⟩` | decide `v`  | L49 |
-| Round(r) | Round(r) | `2f + 1 ⟨PRECOMMIT, h, r, *⟩` for the first time | schedule `TimeoutPrecommit(h, r)` | L47 |
-| Round(r) | Round(r+1) | `TimeoutPrecommit(h, r)` | failed round | L65 |
-| Round(r) | Round(r') | `2f + 1 ⟨PREVOTE, h, r', *, *⟩` with `r' > r` | round skipping | L55 |
-| Round(r) | Round(r') | `2f + 1 ⟨PRECOMMIT, h, r', *, *⟩` with `r' > r` | round skipping | L55 |
+| Unstarted | Round(0) | `start` | send `start` to `Round(0)` | L10, L54 |
+| Round(r) | Decided | `decide(v)` | send `start` to `Height(h+1)` | L49 |
+| Round(r) | Round(r+1) | `next_round(r+1)` | send `start` to `Round(r+1)` | L65 |
+| Round(r) | Round(r') | `next_round(r')` | send `start` to `Round(r')` | L55 |
 
 <!---
 
@@ -104,23 +102,38 @@ State machine `Round(r)` representing the operation of a round `r` of consensus 
 
 The considered set of states are:
 
-- `newRound` (not represented in the pseudo-code)
-- `propose`
-- `prevote`
-- `precommit`
+- Unstarted
+- InProgress
+  - propose
+  - prevote
+  - precommit
+- Stalled
+- Decided
 
-The table below summarizes the state transitions within `Round(r)`.
+The table below summarizes the state transitions within `Round(r)`, considering the substates within `InProgress` state.
 The `Ref` column refers to the line of the pseudo-code where the events can be found.
 
-| State | NextState | Condition | Action | Ref |
+| From | To | Event | Action | Ref |
 |-------|-----------|-----------|--------|-----|
-| newRound | propose | `proposer(h, r) = p` | broadcast `⟨PROPOSAL, h, r, proposal, validRound⟩` | L19 |
-| newRound | propose | `proposer(h, r) != p` (optional) | schedule `TimeoutPropose(h, r)` | L21 |
+| Unstarted | propose | `start` with `proposer(h, r) = p` | `proposal = getValue()` <br>  **broadcast** `⟨PROPOSAL, h, r, proposal, validRound⟩` | L19 |
+| Unstarted | propose | `start` with `proposer(h, r) != p` (optional restriction) | schedule `TimeoutPropose(h, r)` | L21 |
 | propose | prevote | `⟨PROPOSAL, h, r, v, −1⟩` | broadcast `⟨PREVOTE, h, r, {id(v), nil}⟩` | L22 |
-| propose | prevote | `⟨PROPOSAL, h, r, v, vr⟩` and `2f + 1 ⟨PREVOTE, h, vr, id(v)⟩` | broadcast `⟨PREVOTE, h, r, {id(v), nil}⟩` | L28 |
+| propose | prevote | `⟨PROPOSAL, h, r, v, vr⟩` <br> `2f + 1 ⟨PREVOTE, h, vr, id(v)⟩` with `vr < r` | broadcast `⟨PREVOTE, h, r, {id(v), nil}⟩` | L28 |
 | propose | prevote | `TimeoutPropose(h, r)` | broadcast `⟨PREVOTE, h, r, nil⟩` | L57 |
-| prevote  | prevote   | `2f + 1 ⟨PREVOTE, h, r, *⟩` for the first time | schedule `TimeoutPrevote(h, r)⟩` | L34  |
-| prevote  | precommit | `⟨PROPOSAL, h, r, v, ∗⟩` and  `2f + 1 ⟨PREVOTE, h, r, id(v)⟩` for the first time | broadcast `⟨PRECOMMIT, h, r, id(v)⟩` <br> update `lockedValue, lockedRound, validValue, validRound` | L36 |
+| prevote  | prevote   | `2f + 1 ⟨PREVOTE, h, r, *⟩` <br> for the first time | schedule `TimeoutPrevote(h, r)⟩` | L34  |
+| prevote  | precommit | `⟨PROPOSAL, h, r, v, ∗⟩` <br> `2f + 1 ⟨PREVOTE, h, r, id(v)⟩` <br> for the first time | broadcast `⟨PRECOMMIT, h, r, id(v)⟩` <br> update `lockedValue, lockedRound` <br> update `validValue, validRound` | L36 |
 | prevote  | precommit | `2f + 1 ⟨PREVOTE, h, r, nil⟩` | broadcast `⟨PRECOMMIT, h, r, nil⟩` | L44 |
 | prevote  | precommit | `TimeoutPrevote(h, r)` | broadcast `⟨PRECOMMIT, h, r, nil⟩` | L61 |
-| precommit  | precommit | `⟨PROPOSAL, h, r, v, ∗⟩` and  `2f + 1 ⟨PREVOTE, h, r, id(v)⟩` for the first time | update `validValue, validRound` | L36 |
+| precommit  | precommit | `⟨PROPOSAL, h, r, v, ∗⟩` <br>  `2f + 1 ⟨PREVOTE, h, r, id(v)⟩` <br> for the first time | update `validValue, validRound` | L36 |
+
+The table below summarizes the state transitions within the major states of `Round(r)`.
+The `Ref` column refers to the line of the pseudo-code where the events can be found.
+
+| From | To | Event | Action | Ref |
+|-------|-----------|-----------|--------|-----|
+| InProgress | InProgress | `2f + 1 ⟨PRECOMMIT, h, r, *⟩` <br> for the first time | schedule `TimeoutPrecommit(h, r)` | L47 |
+| InProgress | Stalled | `TimeoutPrecommit(h, r)` | emit `next_round(r+1)` | L65 |
+| InProgress | Stalled | `2f + 1 ⟨PREVOTE, h, r', *, *⟩` with `r' > r` | emit `next_round(r')` | L55 |
+| InProgress | Stalled | `2f + 1 ⟨PRECOMMIT, h, r', *, *⟩` with `r' > r` | emit `next_round(r')` | L55 |
+| InProgress | Decided | `⟨PROPOSAL, h, r, v, *⟩` <br> `2f + 1 ⟨PRECOMMIT, h, r, id(v)⟩` | emit `decide(v)`  | L49 |
+| Stalled | Decided | `⟨PROPOSAL, h, r, v, *⟩` <br> `2f + 1 ⟨PRECOMMIT, h, r, id(v)⟩` | emit `decide(v)`  | L49 |
