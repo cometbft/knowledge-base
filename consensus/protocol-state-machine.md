@@ -138,7 +138,13 @@ The considered set of states are:
 - Stalled
 - Decided
 
-The table below summarizes the state transitions within `Round(r)`, considering the substates within `InProgress` state.
+### Core transitions
+
+The table below summarizes the state transitions within the `InProgress` state
+of the `Round(r)` state machine.
+There can only be a single round state machine at the `InProgress` state at a
+time, which represents the node's current round of consensus.
+The following state transitions therefore represent the core of the consensus algorithm.
 The `Ref` column refers to the line of the pseudo-code where the events can be found.
 
 | From | To | Event | Action | Ref |
@@ -154,7 +160,26 @@ The `Ref` column refers to the line of the pseudo-code where the events can be f
 | prevote  | precommit | `TimeoutPrevote(h, r)` | broadcast `⟨PRECOMMIT, h, r, nil⟩` | L61 |
 | precommit  | precommit | `⟨PROPOSAL, h, r, v, ∗⟩` <br>  `2f + 1 ⟨PREVOTE, h, r, id(v)⟩` <br> for the first time | update `validValue, validRound` | L36 |
 
+The ordinary operation of a round of consensus consists on the sequence of
+round steps `propose`, `prevote`, and `precommit`, represented in the table.
+The conditions for concluding a round of consensus, therefore for leaving the
+`InProgress` state, are presented in the next sub-section.
+
+All the state transitions represented in the table on consider message and
+events referring to the nodes's current round `r`.
+In the pseudo-code this current round of a node is referred as `round_p`.
+
+There is, however, an execption: the transition `L28` requires the node to have
+access to `PREVOTE` messages from a previous round `r' < r`.
+Ideally, messages for each round `r` should be handled by the corresponding
+`Round(r)` state machine.
+This transition constitutes an exception that have to be handled in a proper way.
+
+### Exit transitions
+
 The table below summarizes the state transitions within the major states of `Round(r)`.
+The transactions from state `InProgress` consider that node can be at any of
+its substates, whose transitions were covered in the previous section.
 The `Ref` column refers to the line of the pseudo-code where the events can be found.
 
 | From | To | Event | Action | Ref |
@@ -165,3 +190,31 @@ The `Ref` column refers to the line of the pseudo-code where the events can be f
 | InProgress | Stalled | `2f + 1 ⟨PRECOMMIT, h, r', *, *⟩` with `r' > r` | emit `next_round(r')` | L55 |
 | InProgress | Decided | `⟨PROPOSAL, h, r, v, *⟩` <br> `2f + 1 ⟨PRECOMMIT, h, r, id(v)⟩` | emit `decide(v)`  | L49 |
 | Stalled | Decided | `⟨PROPOSAL, h, r, v, *⟩` <br> `2f + 1 ⟨PRECOMMIT, h, r, id(v)⟩` | emit `decide(v)`  | L49 |
+
+The first two transitions are associated to unsuccessful rounds.
+To leave an unsuccessful round, a node has to schedule a `TimeoutPrecommit`
+timeout, which expiration leads it to the subsequent round.
+Once the next round `r+1` is started, by the `Height(h)` state machine, the
+`Round(r)` state machine moves to the `Stalled` state.
+The only possible transition from this point is upon the decision of a value to
+the `Decided` final state.
+
+The next two transitions are associated with the round-skipping mechanism.
+Once the `Height(h)` moves the process to the future round `r'`, the `Round(r)`
+state machine moves to the `Stalled` state.
+The only possible transition from this point is upon the decision of a value to
+the `Decided` final state.
+
+The last two transitions are associated with the decision of a value in round `r`.
+It might occur while this is the current round (`InProgress` state) or after it
+was concluded without success (`Stalled` state).
+
+There is an open question in this specification related to the round-skipping
+state transitions, as they are the only to have as input messages from a round
+`r'` that is not the state machine round `r`.
+It would be possible to have these events processed by the `Round(r')` state
+machine, instead, as this is the round to which the messages belong.
+In this case, if the `Round(r')` state machine is on the `Unstarted` state and
+the events are observed, the round skip event `next_round(r')` could be produced.
+The `Round(r)` state machine, in this case, could process this event instead,
+moving to the `Stalled` state in the same way as it is now.
