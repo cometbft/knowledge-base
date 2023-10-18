@@ -10,13 +10,6 @@ identified by natural numbers `r`.
 We define a [`Round(r)` state machine](#round-state-machine) to represent the
 operation of each of the rounds `r` of a height.
 
-<!---
-The operation of each round consists of essentially three **round steps**:
-`propose`, `prevote`, and `precommit`.
-We represent the operation of the _current round_ of consensus in the
-`InProgress` state of the `Round(r)` state machine.
--->
-
 ## Height state machine
 
 The state machine `Height(h)` represents the operation of a height `h` of consensus.
@@ -72,7 +65,6 @@ Each round `r` of consensus is represented by a state machine `Round(r)`.
 There is a single round _in progress_ at a time, which is always the last
 `Round(r)` state machine to receive the `start` command.
 
-
 A round `r` may not succeed on reaching a decision.
 In this case, the successive round `r+1` is started.
 The uncessful `Round(r)` state machine is not killed at this point, as messages
@@ -120,8 +112,18 @@ The following two state transitions are associated with the round-skipping mecha
 
 | From | To | Event | Action | Ref |
 |-------|-----------|-----------|--------|-----|
-| InProgress | Stalled | `2f + 1 ⟨PREVOTE, h, r', *, *⟩` with `r' > r` | emit `next_round(r')` | L55 |
-| InProgress | Stalled | `2f + 1 ⟨PRECOMMIT, h, r', *, *⟩` with `r' > r` | emit `next_round(r')` | L55 |
+| InProgress | Stalled | `f + 1 ⟨PREVOTE, h, r', *, *⟩` with `r' > r` | emit `next_round(r')` | L55 |
+| InProgress | Stalled | `f + 1 ⟨PRECOMMIT, h, r', *, *⟩` with `r' > r` | emit `next_round(r')` | L55 |
+
+> There is an open question in this specification related to the round-skipping
+> state transitions, as they are the only to have as input messages from a round
+> `r'` that is not the state machine round `r`.
+> It would be possible to have these events processed by the `Round(r')` state
+> machine, instead, as this is the round to which the messages belong.
+> In this case, if the `Round(r')` state machine is on the `Unstarted` state and
+> the events are observed, the round skip event `next_round(r')` could be produced.
+> The `Round(r)` state machine, in this case, could process this event instead,
+> moving to the `Stalled` state in the same way as it is now.
 
 ### InProgress round
 
@@ -196,14 +198,62 @@ The last two transitions are associated with the decision of a value in round `r
 It might occur while this is the current round (`InProgress` state) or after it
 was concluded without success (`Stalled` state).
 
-There is an open question in this specification related to the round-skipping
-state transitions, as they are the only to have as input messages from a round
-`r'` that is not the state machine round `r`.
-It would be possible to have these events processed by the `Round(r')` state
-machine, instead, as this is the round to which the messages belong.
-In this case, if the `Round(r')` state machine is on the `Unstarted` state and
-the events are observed, the round skip event `next_round(r')` could be produced.
-The `Round(r)` state machine, in this case, could process this event instead,
-moving to the `Stalled` state in the same way as it is now.
-
 --->
+
+## Events
+
+Description of the events considered by the algorithm.
+
+We should consider renaming them for more clarity.
+The production of such events requires, in most cases, the definition of a
+state machine to produce them.
+
+### `⟨PROPOSAL, h, r, v, *⟩`
+
+A `PROPOSAL` message for round `(h,r)`.
+Must be received from (i.e., signed by) `proposer(h, r)`.
+
+The algorithm considers that this message carries the (full) value `v`.
+This specification should consider that the carried value can be obtained in a
+different way.
+This event, in this case, consists of the combination of possible multiple
+message or events that have as a result the production of this event for the
+algorithm.
+
+### `2f + 1 ⟨PREVOTE, h, r, *⟩`
+
+Quorum of `PREVOTE` messages for a round `(h, r)`.
+
+The last field value can be:
+
+- `id(v)`: quorum of votes for a value
+- `nil`: quorum of votes for nil
+- `any`: quorum of votes for multiple values and/or nil
+
+### `2f + 1 ⟨PRECOMMIT, h, r, *⟩`
+
+Quorum of `PRECOMMIT` messages for a round `(h, r)`.
+
+The last field value can be:
+
+- `id(v)`: quorum of votes for a value
+- `nil`: quorum of votes for nil
+- `any`: quorum of votes for multiple values and/or nil
+
+### `Timeout*(h, r)`
+
+Timeout events.
+They must be scheduled in order to be triggered.
+
+### `f + 1 ⟨*, h, r, *⟩`
+
+For round-skipping, needs to be properly evaluated.
+
+## Pending of description
+
+- [ ] Events considered by every state machine
+  - Events produced by one state machine and processed by another
+  - External events, produced by the environment (e.g. messages and timeouts)
+- [ ] State machine producing complex events (e.g. `2f + 1` message X)
+- [ ] Routing of events from the higher-level state machine to lower-level state machines
+
