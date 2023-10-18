@@ -2,91 +2,76 @@
 
 The consensus protocol consists of a sequence of **heights**,
 identified by natural numbers `h`.
+We define a [`Height(h)` state machine](#height-state-machine) to represent the
+operation of a height `h`.
 
 Each height of consensus consists of a number of **rounds**,
 identified by natural numbers `r`.
-
-Each round consists of essentially three **round steps**:
-`propose`, `prevote`, and `precommit`.
+We define a [`Round(r)` state machine](#round-state-machine) to represent the
+operation of each of the rounds `r` of a height.
 
 <!---
-
-## Multi-Height state-machine
-
-Proposed states for the state machine for each height `h`:
-
-- Unstarted: 
-  - Initial state
-  - Can be used to store messages for unstarted height `h`
-  - In the algorithm when `hp < h` and `decisionp[h] == nil`
-- Started
-  - Actual consensus execution
-  - In the algorithm when `hp == h` and `decisionp[h] == nil`
-- Decided: 
-  - Final state
-  - May also include the commit/execution of decided value
-  - In the algorithm when `hp >= h` and `decisionp[h] != nil`
-
-
-### Transition: `Unstarted` -> `Started`
-
-```
-10: upon start do StartRound(0)
-
-54:    StartRound(0)
-```
-
-The node has started this height `h == hp`.
-This transaction should initialize the consensus variables.
-
-### Transition: `Started` -> `Decided`
-
-```
-49: upon ⟨PROPOSAL, hp, r, v, ∗⟩ from proposer(hp, r) AND 2f + 1 ⟨PRECOMMIT, hp, r, id(v)⟩ while decisionp[hp] = nil do
-```
-
-The height of consensus is decided.
-The node is ready to move to the next height.
-
+The operation of each round consists of essentially three **round steps**:
+`propose`, `prevote`, and `precommit`.
+We represent the operation of the _current round_ of consensus in the
+`InProgress` state of the `Round(r)` state machine.
 -->
 
 ## Height state machine
 
-State machine `Height(h)` representing the operation of a height `h` of consensus.
+The state machine `Height(h)` represents the operation of a height `h` of consensus.
 
 The considered set of states are:
 
 - Unstarted
-- Round(r), where `r` is a natural number
+  - Initial state
+  - Can be used to store messages for unstarted height `h`
+  - In the algorithm when `hp < h` and `decisionp[h] == nil`
+- InProgress: 
+  - Actual consensus execution
+  - In the algorithm when `hp == h` and `decisionp[h] == nil`
+  - Controls the operation of multiple round state machines `Round(r)`, where `r` is a natural number
 - Decided
+  - Final state
+  - May also include the commit/execution of decided value
+  - In the algorithm when `hp >= h` and `decisionp[h] != nil`
 
-The table below summarizes the state transitions in the `Height(h)` state machine.
+The table below summarizes the major state transitions in the `Height(h)` state machine.
 The `Ref` column refers to the line of the pseudo-code where the events can be found.
 
 | From | To | Event | Action | Ref |
 |-------|-----------|-----------|--------|-----|
-| Unstarted | Round(0) | `start` | send `start` to `Round(0)` | L10, L54 |
-| Round(r) | Decided | `decide(v)` | send `kill` to every `Round(r)` <br> send `start` to `Height(h+1)` | L49 |
-| Round(r) | Round(r+1) | `next_round(r+1)` | send `start` to `Round(r+1)` | L65 |
-| Round(r) | Round(r') | `next_round(r')` | send `start` to `Round(r')` | L55 |
+| Unstarted | InProgress | `start_height` | send `start` to `Round(0)` | L10, L54 |
+| InProgress | Decided | `decide(r, v)` | emit `decide(h, v)` <br> stop to every `Round(r)` | L49 |
 
 A height `h` consists of multiple rounds of consensus, always starting from
 round `0`.
-The `Unstarted` state is intented to store events and messages regarding height `h`
+The `Unstarted` state is intended to store events and messages regarding height `h`
 before its execution is actually started.
 
-Each round `r` of consensus is represented by a state machine `Round(r)`.
-There is a single round _in progress_ at a time, which is always the last
-`Round(r)` state machine to receive the `start` command.
-
 The height is concluded when a decision is reached in _any_ of its rounds.
-The `Decided` state is intented to represent that a decision has been reached,
+The `Decided` state is intended to represent that a decision has been reached,
 while it also allows storing the summary of a decided height.
 
 Once the node moves to the `Decided` state of a height, the operation of
 _every_ round `Round(r)` should be concluded.
 The representation of this transition needs to be improved, for now it is
 considered that the corresponding `Round(r)` state machines are killed.
+
+### InProgress height
+
+The table below represents transitions within the `InProgress` state,
+representing the events that lead a node to start new round of consensus:
+
+| From | To | Event | Action | Ref |
+|-------|-----------|-----------|--------|-----|
+| Round(r) | Round(r+1) | `next_round(r+1)` | send `start` to `Round(r+1)` | L65 |
+| Round(r) | Round(r') | `next_round(r')` | send `start` to `Round(r')` | L55 |
+
+Each round `r` of consensus is represented by a state machine `Round(r)`.
+There is a single round _in progress_ at a time, which is always the last
+`Round(r)` state machine to receive the `start` command.
+
 
 A round `r` may not succeed on reaching a decision.
 In this case, the successive round `r+1` is started.
