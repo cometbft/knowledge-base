@@ -134,18 +134,19 @@ time, which represents the node's current round of consensus.
 The following state transitions therefore represent the core of the consensus algorithm.
 The `Ref` column refers to the line of the pseudo-code where the events can be found.
 
-| From | To | Event | Action | Ref |
-|-------|-----------|-----------|--------|-----|
-| Unstarted | propose | `start` with `proposer(h, r) = p` | `proposal = getValue()` <br>  **broadcast** `⟨PROPOSAL, h, r, proposal, validRound⟩` | L19 |
-| Unstarted | propose | `start` with `proposer(h, r) != p` (optional restriction) | schedule `TimeoutPropose(h, r)` | L21 |
-| propose | prevote | `⟨PROPOSAL, h, r, v, −1⟩` | broadcast `⟨PREVOTE, h, r, {id(v), nil}⟩` | L22 |
-| propose | prevote | `⟨PROPOSAL, h, r, v, vr⟩` <br> `2f + 1 ⟨PREVOTE, h, vr, id(v)⟩` with `vr < r` | broadcast `⟨PREVOTE, h, r, {id(v), nil}⟩` | L28 |
-| propose | prevote | `TimeoutPropose(h, r)` | broadcast `⟨PREVOTE, h, r, nil⟩` | L57 |
-| prevote  | prevote   | `2f + 1 ⟨PREVOTE, h, r, *⟩` <br> for the first time | schedule `TimeoutPrevote(h, r)⟩` | L34  |
-| prevote  | precommit | `⟨PROPOSAL, h, r, v, ∗⟩` <br> `2f + 1 ⟨PREVOTE, h, r, id(v)⟩` <br> for the first time | broadcast `⟨PRECOMMIT, h, r, id(v)⟩` <br> update `lockedValue, lockedRound` <br> update `validValue, validRound` | L36 |
-| prevote  | precommit | `2f + 1 ⟨PREVOTE, h, r, nil⟩` | broadcast `⟨PRECOMMIT, h, r, nil⟩` | L44 |
-| prevote  | precommit | `TimeoutPrevote(h, r)` | broadcast `⟨PRECOMMIT, h, r, nil⟩` | L61 |
-| precommit  | precommit | `⟨PROPOSAL, h, r, v, ∗⟩` <br>  `2f + 1 ⟨PREVOTE, h, r, id(v)⟩` <br> for the first time | update `validValue, validRound` | L36 |
+
+| From      | To        | Ev Name          | Ev Details                                                                                  | Actions and Return                                                                        | Ref |
+| ----------- | ----------- | ------------------ | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ----- |
+| Unstarted | propose   | StartProposer(v) | `start` with `proposer(h, r) = p` and `v`                                                  | `proposal⟨h, r, proposal, validRound⟩`                                                  | L19 |
+| Unstarted | propose   | StartNonProposer | `start` with `proposer(h, r) != p` (optional restriction)                                   | `timeout_propose(h, r)`                                                                   | L21 |
+| propose   | prevote   | Proposal(v, -1)  | `⟨PROPOSAL, h, r, v, −1⟩`                                                                | `prevote(h, r, {id(v), nil}⟩`                                                            | L22 |
+| propose   | prevote   | Proposal(v, vr)  | `⟨PROPOSAL, h, r, v, vr⟩` <br> `2f + 1 ⟨PREVOTE, h, vr, id(v)⟩` with `vr < r`           | `prevote(h, r, {id(v), nil}⟩`                                                            | L28 |
+| propose   | prevote   | TimeoutPropose   | `TimeoutPropose(h, r)`                                                                      | `prevote(h, r, nil⟩`                                                                     | L57 |
+| prevote   | prevote   | PolkaAny         | `2f + 1 ⟨PREVOTE, h, r, *⟩` <br> for the first time                                       | `timeout_prevote(h, r)⟩`                                                                 | L34 |
+| prevote   | precommit | PolkaValue(v)    | `⟨PROPOSAL, h, r, v, ∗⟩` <br> `2f + 1 ⟨PREVOTE, h, r, id(v)⟩` <br> for the first time  | update`lockedValue, lockedRound, validValue, validRound`,<br /> `precommit(h, r, id(v)⟩` | L36 |
+| prevote   | precommit | PolkaNil         | `2f + 1 ⟨PREVOTE, h, r, nil⟩`                                                             | `prcommit(h, r, nil⟩`                                                                    | L44 |
+| prevote   | precommit | TimeoutPrevote   | `TimeoutPrevote(h, r)`                                                                      | `precommit(h, r, nil⟩`                                                                   | L61 |
+| precommit | precommit | PolkaValue(v)    | `⟨PROPOSAL, h, r, v, ∗⟩` <br>  `2f + 1 ⟨PREVOTE, h, r, id(v)⟩` <br> for the first time | update`validValue, validRound`                                                            | L36 |
 
 The ordinary operation of a round of consensus consists on the sequence of
 round steps `propose`, `prevote`, and `precommit`, represented in the table.
@@ -171,14 +172,14 @@ The transactions from state `InProgress` consider that node can be at any of
 its substates, whose transitions were covered in the previous section.
 The `Ref` column refers to the line of the pseudo-code where the events can be found.
 
-| From | To | Event | Action | Ref |
-|-------|-----------|-----------|--------|-----|
-| InProgress | InProgress | `2f + 1 ⟨PRECOMMIT, h, r, *⟩` <br> for the first time | schedule `TimeoutPrecommit(h, r)` | L47 |
-| InProgress | Stalled | `TimeoutPrecommit(h, r)` | emit `next_round(r+1)` | L65 |
-| InProgress | Stalled | `2f + 1 ⟨PREVOTE, h, r', *, *⟩` with `r' > r` | emit `next_round(r')` | L55 |
-| InProgress | Stalled | `2f + 1 ⟨PRECOMMIT, h, r', *, *⟩` with `r' > r` | emit `next_round(r')` | L55 |
-| InProgress | Decided | `⟨PROPOSAL, h, r, v, *⟩` <br> `2f + 1 ⟨PRECOMMIT, h, r, id(v)⟩` | emit `decide(v)`  | L49 |
-| Stalled | Decided | `⟨PROPOSAL, h, r, v, *⟩` <br> `2f + 1 ⟨PRECOMMIT, h, r, id(v)⟩` | emit `decide(v)`  | L49 |
+
+| From       | To         | Ev Name           | Event  Details                                                      | Action                    | Ref |
+| ------------ | ------------ | ------------------- | --------------------------------------------------------------------- | --------------------------- | ----- |
+| InProgress | InProgress | PrecommitAny      | `2f + 1 ⟨PRECOMMIT, h, r, *⟩` <br> for the first time             | `timeout_precommit(h, r)` | L47 |
+| InProgress | Unstarted  | TimeoutPrecommit  | `TimeoutPrecommit(h, r)`                                            | `next_round(r+1)`         | L65 |
+| InProgress | Unstarted  | RoundSkip(r')     | `f + 1 ⟨PREVOTE, h, r', *, *⟩` with `r' > r`                      | `next_round(r')`          | L55 |
+| InProgress | Decided    | PrecommitValue(v) | `⟨PROPOSAL, h, r, v, *⟩` <br> `2f + 1 ⟨PRECOMMIT, h, r, id(v)⟩` | `commit(v)`               | L49 |
+|            |            |                   |                                                                     |                           |     |
 
 The first two transitions are associated to unsuccessful rounds.
 To leave an unsuccessful round, a node has to schedule a `TimeoutPrecommit`
