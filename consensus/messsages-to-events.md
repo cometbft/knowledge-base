@@ -23,8 +23,8 @@ Messages with heights `h'` with either `h' < h` (past) or `h' > h` (future).
 
 The pseudo-code description of the algorithm ignores messages from different
 heights.
-If we take the same approach in this specification, we have to specified
-separatedly modules responsible to handle those messages.
+If we take the same approach in this specification, we have to specify
+separately modules responsible to handle those messages.
 
 
 - Past heights (`h' < h`): the consensus state machine is not affected by such
@@ -40,8 +40,8 @@ separatedly modules responsible to handle those messages.
   1. Buffer a limited amount of such messages
   2. Assume that the communication subsystem (p2p) is able to retrieve (ask for
      retransmission) of them when the process reaches height `h'`.
-     Notice that this option implies that processs keeps a minimal set of
-     consensus messages that enables peers lagging behind to decide a past height. 
+     Notice that this option implies that processes keep a minimal set of
+     consensus messages that enables peers lagging behind to decide a past height.
 
 ## Previous rounds
 
@@ -59,7 +59,7 @@ previous rounds:
   - Associated full value messages are required to produce the `⟨PROPOSAL, h, r', v, *⟩` event
 
 The production of the enumerated events from previous rounds should be
-identitical to the production of events from messages from the [current round](#current-round).
+identical to the production of events from messages from the [current round](#current-round).
 
 ## Future rounds
 
@@ -77,12 +77,12 @@ in the pseudo-code:
 ```
 
 The current interpretation of this rule is that messages from a round `r' > r`
-are received from `f + 1` voting-power equivalent distint senders.
+are received from `f + 1` voting-power equivalent distinct senders.
 This means, that at least `1` correct process is at round `r'`.
 
-While this threshould does not need to be adopted (it can be configurable),
+While this threshold does not need to be adopted (it can be configurable),
 messages from a future round should initially have their unique senders counted.
-Once the round skip treshould of processs is reached, the corresponding event
+Once the round skip threshold of processes is reached, the corresponding event
 should be produced.
 
 ### Limits
@@ -106,6 +106,65 @@ There are two options, which can in particular be combined:
 ## Current round
 
 Messages matching the current round `(h, r)` of a process produce most of the
-relevants events for the consensus state machine.
+relevant events for the consensus state machine.
 
 TODO:
+
+## Counting votes
+
+Messages `⟨PREVOTE, h, r, *⟩` and `⟨PRECOMMIT, h, r, *⟩` are generically called votes.
+They refer to a round step `(h, r, s)` of consensus, where `s` is defined by
+the vote type, either `PREVOTE` or `PRECOMMIT`.
+
+The processing of _individual_ vote messages don't produce events relevant for
+the consensus state machine.
+But when the number of unique vote messages referring to a given round step
+`(h, r, s)` reaches a given _threshold_, relevant events are produced;
+the produced event depends on the value carried by such votes.
+
+General assumptions regarding vote messages:
+
+- Vote messages are produced, signed and broadcast by a validator, which is its
+  *sender*
+  - To define whether a vote message for round step `(h, r, s)` is valid, the
+    validator set for height `h` must to be known.
+    The validator set can change over heights, but it is the same within a height.
+- To each validator in the validator set of a height `h` is associated a *voting power*
+  - Thresholds are computed from the voting power associated to the
+    sender of each vote message
+- A vote message carries a value: either a reference to a proposed value
+  `id(v)`, or the special `nil` value
+  - For practical effects, it should be considered that the size of vote
+    messages is constant
+- Correct validators produce at most one vote message per round step: either
+  for a `id(v)` or for `nil`
+- Byzantine validators may equivocate and produce multiple distinct vote
+  messages for the same round step. Equivocating vote messages differ on the
+  value they carry: for  `nil`, `id(v)`, `id(v')`, etc.
+  - This possibility constitutes an attack vector. A process must thus restrict
+    the number of distinct vote messages from the same sender and referring to
+    the same round step that can be stored.
+
+### `f + 1` threshold
+
+This threshold represents that vote messages referring to a round step were
+received from a enough number of unique senders, so that it is guaranteed that
+_at least one_ of the senders is a _correct_ validator.
+
+The rationale here is that the cumulative voting power of Byzantine validators
+cannot exceed `f`, so that at least one of the considered vote messages must
+have been produced by a correct validator.
+
+### `2f + 1` threshold
+
+This threshold represents that vote messages referring to a round step were
+received from a enough number of unique senders, so that it is guaranteed that
+_the majority_ of the senders are _correct_ validators.
+
+The rationale here is that the cumulative voting power of Byzantine validators
+cannot exceed `f`, so that the subset of considered vote messages that must
+have been produced by correct validators have a cumulative voting power of at
+least `f + 1`, which is strictly greater than `f`.
+
+> TODO: this also means that the majority of the voting power hold by correct
+> validators is represented in the considered set of vote messages.
