@@ -99,13 +99,13 @@ The considered set of states are:
 The table below summarizes the major state transitions in the `Round(r)` state machine.
 The `Ref` column refers to the line of the pseudo-code where the events can be found.
 
-| From | To | Event | Action | Ref |
-|-------|-----------|-----------|--------|-----|
-| Unstarted  | InProgress | `start` from `Height(h)` state machine | |  |
-| InProgress | Decided | `⟨PROPOSAL, h, r, v, *⟩` <br> `2f + 1 ⟨PRECOMMIT, h, r, id(v)⟩` | emit `decide(r, v)`  | L49 |
-| InProgress | Stalled | `TimeoutPrecommit(h, r)` | emit `next_round(r+1)` | L65 |
-| InProgress | Stalled | `next_round(r')` with `r' > r` from `Height(h)` state machine |  |  |
-| Stalled | Decided | `⟨PROPOSAL, h, r, v, *⟩` <br> `2f + 1 ⟨PRECOMMIT, h, r, id(v)⟩` | emit `decide(r, v)`  | L49 |
+| From       | To         | Ev Name           | Event  Details                                                      | Action                    | Ref |
+| ------------ | ------------ | ------------------- | --------------------------------------------------------------------- | --------------------------- | ----- |
+| InProgress | InProgress | PrecommitAny      | `2f + 1 ⟨PRECOMMIT, h, r, *⟩` <br> for the first time             | schedule `TimeoutPrecommit(h, r)` | L47 |
+| InProgress | Unstarted  | TimeoutPrecommit  | `TimeoutPrecommit(h, r)`                                            | `next_round(r+1)`         | L65 |
+| InProgress | Unstarted  | RoundSkip(r')     | `f + 1 ⟨PREVOTE, h, r', *, *⟩` with `r' > r`                      | `next_round(r')`          | L55 |
+| InProgress | Decided    | PrecommitValue(v) | `⟨PROPOSAL, h, r, v, *⟩` <br> `2f + 1 ⟨PRECOMMIT, h, r, id(v)⟩` | `commit(v)`               | L49 |
+
 
 The following two state transitions are associated with the round-skipping mechanism.
 **TODO:** They need to be reviewed.
@@ -134,19 +134,18 @@ time, which represents the node's current round of consensus.
 The following state transitions therefore represent the core of the consensus algorithm.
 The `Ref` column refers to the line of the pseudo-code where the events can be found.
 
-
 | From      | To        | Ev Name          | Ev Details                                                                                  | Actions and Return                                                                        | Ref |
 | ----------- | ----------- | ------------------ | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ----- |
-| Unstarted | propose   | StartProposer(v) | `start` with `proposer(h, r) = p` and `v`                                                  | `proposal⟨h, r, proposal, validRound⟩`                                                  | L19 |
-| Unstarted | propose   | StartNonProposer | `start` with `proposer(h, r) != p` (optional restriction)                                   | `timeout_propose(h, r)`                                                                   | L21 |
-| propose   | prevote   | Proposal(v, -1)  | `⟨PROPOSAL, h, r, v, −1⟩`                                                                | `prevote(h, r, {id(v), nil}⟩`                                                            | L22 |
-| propose   | prevote   | Proposal(v, vr)  | `⟨PROPOSAL, h, r, v, vr⟩` <br> `2f + 1 ⟨PREVOTE, h, vr, id(v)⟩` with `vr < r`           | `prevote(h, r, {id(v), nil}⟩`                                                            | L28 |
-| propose   | prevote   | TimeoutPropose   | `TimeoutPropose(h, r)`                                                                      | `prevote(h, r, nil⟩`                                                                     | L57 |
-| prevote   | prevote   | PolkaAny         | `2f + 1 ⟨PREVOTE, h, r, *⟩` <br> for the first time                                       | `timeout_prevote(h, r)⟩`                                                                 | L34 |
-| prevote   | precommit | PolkaValue(v)    | `⟨PROPOSAL, h, r, v, ∗⟩` <br> `2f + 1 ⟨PREVOTE, h, r, id(v)⟩` <br> for the first time  | update`lockedValue, lockedRound, validValue, validRound`,<br /> `precommit(h, r, id(v)⟩` | L36 |
-| prevote   | precommit | PolkaNil         | `2f + 1 ⟨PREVOTE, h, r, nil⟩`                                                             | `prcommit(h, r, nil⟩`                                                                    | L44 |
-| prevote   | precommit | TimeoutPrevote   | `TimeoutPrevote(h, r)`                                                                      | `precommit(h, r, nil⟩`                                                                   | L61 |
-| precommit | precommit | PolkaValue(v)    | `⟨PROPOSAL, h, r, v, ∗⟩` <br>  `2f + 1 ⟨PREVOTE, h, r, id(v)⟩` <br> for the first time | update`validValue, validRound`                                                            | L36 |
+| Unstarted | propose   | StartProposer(v) | `start` with `proposer(h, r) = p` and `v = getValue()`                                                  | broadcast `⟨PROPOSAL, h, r, v, validRound⟩`                                                  | L19 |
+| Unstarted | propose   | StartNonProposer | `start` with `proposer(h, r) != p` (optional restriction)                                   | schedule `TimeoutPropose(h, r)`                                                                   | L21 |
+| propose   | prevote   | Proposal(v, -1)  | `⟨PROPOSAL, h, r, v, −1⟩`                                                                | broadcast `⟨PREVOTE, h, r, {id(v), nil}⟩`                                                            | L22 |
+| propose   | prevote   | Proposal(v, vr)  | `⟨PROPOSAL, h, r, v, vr⟩` <br> `2f + 1 ⟨PREVOTE, h, vr, id(v)⟩` with `vr < r`           | broadcast `⟨PREVOTE, h, r, {id(v), nil}⟩`                                                            | L28 |
+| propose   | prevote   | TimeoutPropose   | `TimeoutPropose(h, r)`                                                                      | broadcast `⟨PREVOTE, h, r, nil⟩`                                                                     | L57 |
+| prevote   | prevote   | PolkaAny         | `2f + 1 ⟨PREVOTE, h, r, *⟩` <br> for the first time                                       | schedule `TimeoutPrevote(h, r)⟩`                                                                 | L34 |
+| prevote   | precommit | PolkaValue(v)    | `⟨PROPOSAL, h, r, v, ∗⟩` <br> `2f + 1 ⟨PREVOTE, h, r, id(v)⟩` <br> for the first time  | update `lockedValue, lockedRound, validValue, validRound`,<br /> broadcast `⟨PRECOMMIT, h, r, id(v)⟩` | L36 |
+| prevote   | precommit | PolkaNil         | `2f + 1 ⟨PREVOTE, h, r, nil⟩`                                                             | broadcast `⟨PRECOMMIT, h, r, nil⟩`                                                                    | L44 |
+| prevote   | precommit | TimeoutPrevote   | `TimeoutPrevote(h, r)`                                                                      | broadcast `⟨PRECOMMIT, h, r, nil⟩`                                                                   | L61 |
+| precommit | precommit | PolkaValue(v)    | `⟨PROPOSAL, h, r, v, ∗⟩` <br>  `2f + 1 ⟨PREVOTE, h, r, id(v)⟩` <br> for the first time | update `validValue, validRound`                                                            | L36 |
 
 The ordinary operation of a round of consensus consists on the sequence of
 round steps `propose`, `prevote`, and `precommit`, represented in the table.
@@ -171,7 +170,6 @@ The table below summarizes the state transitions within the major states of `Rou
 The transactions from state `InProgress` consider that node can be at any of
 its substates, whose transitions were covered in the previous section.
 The `Ref` column refers to the line of the pseudo-code where the events can be found.
-
 
 | From       | To         | Ev Name           | Event  Details                                                      | Action                    | Ref |
 | ------------ | ------------ | ------------------- | --------------------------------------------------------------------- | --------------------------- | ----- |
