@@ -1,3 +1,5 @@
+// -*- mode: Bluespec; -*-
+
 module consensus {
 
   // a process name is just a string in our specification
@@ -94,5 +96,46 @@ pure def consensus (state: ConsensusState, ev: Event) : (ConsensusState, Result)
         (state, defaultResult)
 }
 
-    
+/* ****************************************************************************
+ * Global state
+ * ************************************************************************* */
+
+var system : Proc_t -> ConsensusState
+var _Result : Result
+
+
+
+pure def initialProcess (name: Proc_t) : ConsensusState = {
+    { p: name, height : 1, round: 0, step: "", validRound: -1}
+}
+
+action init = all {
+    system' = Map ("Josef" -> initialProcess("Josef")),
+    _Result' = defaultResult
+}
+
+// just to write a test.
+action StartRound(proc: Proc_t, h:int, r:Round_t, value:Value_t) : bool = all {
+    val res = consensus(system.get(proc),  {name : "StartRound",
+                                            height : h,
+                                            round: r,
+                                            value: value,
+                                            vr: -1} )
+    all {
+        system' = system.put(proc, res._1),
+        _Result' = res._2
+    }
+}
+
+run FirstTest = {
+    init
+    .then(StartRound("Josef", 1, 0, "testbal"))
+    .then(all{
+        assert(_Result.timeout == noTimeout),
+        assert(_Result.proposal.src == "Josef"),
+        system' = system,
+        _Result' = _Result,
+   }   )
+}   
+
 }
