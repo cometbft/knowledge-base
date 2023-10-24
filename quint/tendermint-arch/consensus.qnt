@@ -46,7 +46,7 @@ type Event = {
     vr: Round_t
 }    
 
-// what is a good way to encode optionals.
+// what is a good way to encode optionals? I do with default values
 type Result = {
     proposal: ProposeMsg_t,
     voteMessage: VoteMsg_t,
@@ -68,6 +68,7 @@ val defaultResult : Result = {
                 decided: noDecided,
                 skipRound: noSkipRound}
 
+// How are we actually doing this in the state machine approach
 pure def Proposer (height: int, round: Round_t) : Proc_t = "Josef"
 
 pure def line11 (state: ConsensusState, ev: Event) : (ConsensusState, Result) = {
@@ -84,6 +85,7 @@ pure def line11 (state: ConsensusState, ev: Event) : (ConsensusState, Result) = 
 }
 
 pure def line22 (state: ConsensusState, ev: Event) : (ConsensusState, Result) = {
+    // TODO
     (state, defaultResult)
 }
 
@@ -104,7 +106,6 @@ var system : Proc_t -> ConsensusState
 var _Result : Result
 
 
-
 pure def initialProcess (name: Proc_t) : ConsensusState = {
     { p: name, height : 1, round: 0, step: "", validRound: -1}
 }
@@ -115,7 +116,7 @@ action init = all {
 }
 
 // just to write a test.
-action StartRound(proc: Proc_t, h:int, r:Round_t, value:Value_t) : bool = all {
+action StartRound(proc: Proc_t, h: int, r: Round_t, value: Value_t) : bool = all {
     val res = consensus(system.get(proc),  {name : "StartRound",
                                             height : h,
                                             round: r,
