@@ -3,7 +3,7 @@
 module consensus {
 
   // a process name is just a string in our specification
-  type Proc_t = str
+  type Address_t = str
   // a value is also a string
   type Value_t = str
   // a state is also a string
@@ -17,7 +17,7 @@ module consensus {
 
 // the type of propose messages
   type ProposeMsg_t = {
-    src: Proc_t,
+    src: Address_t,
     height: Height_t,
     round: Round_t,
     proposal: Value_t,
@@ -26,7 +26,7 @@ module consensus {
 
   // the type of Prevote and Precommit messages
   type VoteMsg_t = {
-    src: Proc_t,
+    src: Address_t,
     height: Height_t,
     round: Round_t,
     step: Step_t,  // "prevote" or "precommit"
@@ -34,7 +34,7 @@ module consensus {
   }
 
 type ConsensusState = {
-    p: Proc_t,
+    p: Address_t,
     height : int,
     round: Round_t,
     step: Step_t, // "newRound", propose, prevote, precommit, decided
@@ -73,7 +73,7 @@ val consensusEvents = Set(
     "PolkaAny",                // Receive +2/3 prevotes for anything and they are not the same
     "ProposalAndPolkaAndValid", // 36 when valid and step >= prevote
     "PrecommitAny",           // Receive +2/3 precommits for anything.
-    "ProposalAndPreCommitAndValid", // decide
+    "ProposalAndCommitAndValid", // decide
     "RoundSkip",               // Receive +1/3 votes from a higher round.
     "TimeoutPropose",          // Timeout waiting for proposal.
     "TimeoutPrevote",          // Timeout waiting for prevotes.
@@ -215,7 +215,7 @@ pure def ProposalAndPolkaAndValid (state: ConsensusState, ev: Event) : (Consensu
                                                         round: state.round,
                                                         step: "precommit",  
                                                         id: ev.value}}
-        (state, defaultResult)
+        (newstate, result)
         }
     else {
         (state, defaultResult)
@@ -247,7 +247,7 @@ pure def PrecommitAny (state: ConsensusState, ev: Event) : (ConsensusState, Resu
 }
 
 // line 49
-pure def ProposalAndPreCommitAndValid  (state: ConsensusState, ev: Event) : (ConsensusState, Result) = {
+pure def ProposalAndCommitAndValid  (state: ConsensusState, ev: Event) : (ConsensusState, Result) = {
     if (state.step != "decided") {
         val newstate = { ...state, step: "decided"}
         val result = { ...defaultResult, decided: ev.value}
@@ -322,8 +322,8 @@ pure def consensus (state: ConsensusState, ev: Event) : (ConsensusState, Result)
         PolkaNil(state, ev)
     else if (ev.name == "PrecommitAny")
         PrecommitAny(state, ev)
-    else if (ev.name == "ProposalAndPreCommitAndValid")
-        ProposalAndPreCommitAndValid(state, ev)
+    else if (ev.name == "ProposalAndCommitAndValid")
+        ProposalAndCommitAndValid(state, ev)
     else if (ev.name == "TimeoutPropose")
         TimeoutPropose (state, ev)
     else if (ev.name == "TimeoutPrevote")
@@ -338,12 +338,12 @@ pure def consensus (state: ConsensusState, ev: Event) : (ConsensusState, Result)
  * Global state
  * ************************************************************************* */
 
-var system : Proc_t -> ConsensusState
+var system : Address_t -> ConsensusState
 var _Result : Result
 var _Event : Event
 
 
-pure def initialProcess (name: Proc_t) : ConsensusState = {
+pure def initialProcess (name: Address_t) : ConsensusState = {
     { p: name, height : 1, round: 0, step: "newRound", lockedRound: -1, lockedValue: "nil", validRound: -1, validValue: "nil"}
 }
 
@@ -360,7 +360,7 @@ action init = all {
 
 
 // just to write a test.
-action FireEvent(eventName: str, proc: Proc_t, h: int, r: Round_t, value: Value_t, vr: Round_t) : bool = all {
+action FireEvent(eventName: str, proc: Address_t, h: Height_t, r: Round_t, value: Value_t, vr: Round_t) : bool = all {
     val event =  {name : eventName,
                                             height : h,
                                             round: r,
@@ -383,23 +383,127 @@ action step = any {
     FireEvent(name, "Josef", height, round, value, vr)
 }
 
-run FirstTest = {
+action unchangedAll = all {
+    system' = system,
+    _Result' = _Result,
+    _Event' = _Event,
+}
+
+ /*    "NewHeight",
+    "NewRound",                // Start a new round, not as proposer.
+    "NewRoundProposer(Value)", // Start a new round and propose the Value.
+    "Proposal",      // Receive a proposal with possible polka round.
+    "ProposalAndPolkaPreviousAndValid", //28 when valid
+    "ProposalInvalid", // 26 and 32 when invalid in step propose
+    "PolkaNil",                // Receive +2/3 prevotes for nil.
+    "PolkaAny",                // Receive +2/3 prevotes for anything and they are not the same
+    "ProposalAndPolkaAndValid", // 36 when valid and step >= prevote
+    "PrecommitAny",           // Receive +2/3 precommits for anything.
+    "ProposalAndCommitAndValid", // decide
+    "RoundSkip",               // Receive +1/3 votes from a higher round.
+    "TimeoutPropose",          // Timeout waiting for proposal.
+    "TimeoutPrevote",          // Timeout waiting for prevotes.
+    "TimeoutPrecommit"       // Timeout waiting for precommits
+    */ 
+
+run DecideNonProposerTest = {
     init
-    .then(FireEvent("StartRound", "Josef", 1, 0, "testbal", -1))
+    .then(FireEvent("NewRound", "Josef", 1, 0, "", -1))
     .then(all{
-        assert(_Result.timeout == noTimeout),
-        assert(_Result.proposal.src == "Josef"),
-        system' = system,
-        _Result' = _Result,
-        _Event' = _Event,
-        })
-    .then(FireEvent(("Proposal", "Josef", 1, 0, "testbal", -1)))
-    .then(all{
-        assert(true), //TODO
-        system' = system,
-        _Result' = _Result,   
-        _Event' = _Event,    
+        assert(_Result.timeout == "timeoutPropose"),
+        unchangedAll
     })
-}   
+    .then(FireEvent("Proposal", "Josef", 1, 0, "block", -1))
+    .then(all{
+        assert(_Result.voteMessage.step == "prevote" and _Result.voteMessage.id == "block"),
+        unchangedAll
+    })
+    .then(FireEvent("ProposalAndPolkaAndValid", "Josef", 1, 0, "block", -1))
+    .then(all{
+        assert(_Result.voteMessage.step == "precommit" and _Result.voteMessage.id == "block"),
+        unchangedAll
+    })
+    .then(FireEvent("ProposalAndCommitAndValid", "Josef", 1, 0, "block", -1))  
+    .then(all{
+        assert(_Result.decided == "block"),
+        unchangedAll
+    })
+    .then(FireEvent("NewHeight", "Josef", system.get("Josef").height + 1, 0, "", -1))
+    .then(all{
+        assert(system.get("Josef").height == 2),
+        unchangedAll
+    })    
+    .then(FireEvent("NewRoundProposer", "Josef", 2, 0, "nextBlock", -1))
+    .then(all{
+        assert(_Result.timeout != "timeoutPropose" and _Result.proposal.proposal == "nextBlock"),
+        unchangedAll
+    })
+    .then(FireEvent("Proposal", "Josef", 2, 0, "nextBlock", -1)) // it is assumed that the proposer receives its own message
+    .then(all{
+        assert(_Result.voteMessage.step == "prevote" and system.get("Josef").step == "prevote"),
+        unchangedAll
+    })
+    .then(FireEvent("PolkaAny", "Josef", 2, 0, "nextBlock", -1))
+    .then(all{
+        assert(_Result.timeout == "timeoutPrevote"),
+        unchangedAll
+    })
+    .then(FireEvent("TimeoutPrevote", "Josef", 2, 0, "nextBlock", -1))
+    .then(all{
+        assert(_Result.voteMessage.step == "precommit" and _Result.voteMessage.id == "nil" and
+               system.get("Josef").step == "precommit"),
+        unchangedAll
+    })
+    .then(FireEvent("PrecommitAny", "Josef", 2, 0, "nextBlock", -1))
+    .then(all{
+        assert(_Result.timeout == "timeoutPrecommit"),
+        unchangedAll
+    })
+    .then(FireEvent("TimeoutPrecommit", "Josef", 2, 0, "nextBlock", -1))
+    .then(all{
+        assert(_Result.skipRound == 1),
+        unchangedAll
+    })
+    .then(FireEvent("NewRound", "Josef", 2, 1, "", -1))
+    .then(all{
+        assert(_Result.timeout == "timeoutPropose"),
+        unchangedAll
+    })
+    .then(FireEvent("TimeoutPropose", "Josef", 2, 1, "nextBlock", -1))
+    .then(all{
+        assert(_Result.voteMessage.step == "prevote" and _Result.voteMessage.id == "nil" and
+               system.get("Josef").step == "prevote"),
+        unchangedAll
+    })
+    .then(FireEvent("PolkaNil", "Josef", 2, 1, "nextBlock", -1))
+    .then(all{
+        assert(_Result.voteMessage.step == "precommit" and _Result.voteMessage.id == "nil" and
+               system.get("Josef").step == "precommit"),
+        unchangedAll
+    })
+    .then(FireEvent("PrecommitAny", "Josef", 2, 1, "nextBlock", -1))
+    .then(all{
+        assert(_Result.timeout == "timeoutPrecommit"),
+        unchangedAll
+    })
+    .then(FireEvent("TimeoutPrecommit", "Josef", 2, 1, "nextBlock", -1))
+    .then(all{
+        assert(_Result.skipRound == 2),
+        unchangedAll
+    })
+    .then(FireEvent("NewRound", "Josef", 2, 2, "", -1))
+    .then(all{
+        assert(_Result.timeout == "timeoutPropose"),
+        unchangedAll
+    })
+    .then(FireEvent("ProposalInvalid", "Josef", 2, 2, "", -1))
+    .then(all{
+        assert(_Result.voteMessage.step == "prevote" and _Result.voteMessage.id == "nil" and
+               system.get("Josef").step == "prevote"),
+        unchangedAll
+    })
+}
+
 
 }
+
