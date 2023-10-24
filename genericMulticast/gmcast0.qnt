@@ -40,17 +40,22 @@ module gmcast0 {
     var nodeState: ProcId -> NodeState
     var networkState: Network
 
-    // action init: bool = all {
-    //     nodeState' =  ProcIds.mapBy(
-    //         p => {
-    //             k: 0,
-    //             pending: Set(),
-    //             delivering: Set(),
-    //             delivered: Set(),
-    //             previous: Set()
-    //         }),
-    //     networkState' = {msgsSent: Set(), msgsRcvd: Map()}
-    // }
+    action init: bool = all {
+        nodeState' =  ProcIds.mapBy(
+            p => {
+                k: 0,
+                pending: Set(),
+                delivering: Set(),
+                delivered: Set(),
+                previous: Set()
+            }),
+        networkState' = {msgsSent: Set(), msgsRcvd: Set()}
+    }
+
+    action unchanged_all: bool = all {
+        networkState' = networkState,
+        nodeState' = nodeState
+    }
 
     action GMSend(sender: ProcId, payload: str, groups: Set[Set[ProcId]]): bool = {
         all {
@@ -77,7 +82,8 @@ module gmcast0 {
                         )
                     )
                 )
-            networkState' = {msgsSent: newMsgsSent, ...networkState}
+            networkState' = {msgsSent: newMsgsSent, ...networkState},
+            nodeState' = nodeState
         }
     }
 }
