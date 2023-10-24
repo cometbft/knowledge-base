@@ -35,7 +35,9 @@ The `Ref` column refers to the line of the pseudo-code where the events can be f
 | From | To | Event | Action | Ref |
 |-------|-----------|-----------|--------|-----|
 | Unstarted | InProgress | `start_height` | send `start` to `Round(0)` | L10, L54 |
-| InProgress | Decided | `decide(r, v)` | emit `decide(h, v)` <br> stop to every `Round(r)` | L49 |
+| Round(r) | Decided | `decide(r', v)` | emit `decide(h, v)` <br> stop to every `Round(r)` | L49 |
+| Round(r) | Round(r+1) | `next_round(r+1)` | send `start` to `Round(r+1)` | L65 |
+| Round(r) | Round(r') | `next_round(r')` | send `start` to `Round(r')` | L55 |
 
 A height `h` consists of multiple rounds of consensus, always starting from
 round `0`.
@@ -51,15 +53,12 @@ _every_ round `Round(r)` should be concluded.
 The representation of this transition needs to be improved, for now it is
 considered that the corresponding `Round(r)` state machines are killed.
 
+<!---
+
 ### InProgress height
 
 The table below represents transitions within the `InProgress` state,
 representing the events that lead a node to start new round of consensus:
-
-| From | To | Event | Action | Ref |
-|-------|-----------|-----------|--------|-----|
-| Round(r) | Round(r+1) | `next_round(r+1)` | send `start` to `Round(r+1)` | L65 |
-| Round(r) | Round(r') | `next_round(r')` | send `start` to `Round(r')` | L55 |
 
 Each round `r` of consensus is represented by a state machine `Round(r)`.
 There is a single round _in progress_ at a time, which is always the last
@@ -74,6 +73,8 @@ While in a round `r`, a node may realize that several nodes are already in a
 future round `r' > r`.
 When this happens, the node switches to round `r'`, skipping both the current
 and the possible intermediate rounds.
+
+--->
 
 ## Round state-machine
 
@@ -102,10 +103,12 @@ The `Ref` column refers to the line of the pseudo-code where the events can be f
 | From       | To         | Ev Name           | Event  Details                                                      | Action                    | Ref |
 | ------------ | ------------ | ------------------- | --------------------------------------------------------------------- | --------------------------- | ----- |
 | InProgress | InProgress | PrecommitAny      | `2f + 1 ⟨PRECOMMIT, h, r, *⟩` <br> for the first time             | schedule `TimeoutPrecommit(h, r)` | L47 |
-| InProgress | Unstarted  | TimeoutPrecommit  | `TimeoutPrecommit(h, r)`                                            | `next_round(r+1)`         | L65 |
-| InProgress | Unstarted  | RoundSkip(r')     | `f + 1 ⟨PREVOTE, h, r', *, *⟩` with `r' > r`                      | `next_round(r')`          | L55 |
+| InProgress | Unstarted (?)  | TimeoutPrecommit  | `TimeoutPrecommit(h, r)`                                            | `next_round(r+1)`         | L65 |
+| InProgress | Unstarted (?) | RoundSkip(r')     | `f + 1 ⟨*, h, r', *, *⟩` with `r' > r`                      | `next_round(r')`          | L55 |
 | InProgress | Decided    | PrecommitValue(v) | `⟨PROPOSAL, h, r, v, *⟩` <br> `2f + 1 ⟨PRECOMMIT, h, r, id(v)⟩` | `commit(v)`               | L49 |
 
+
+<!--
 
 The following two state transitions are associated with the round-skipping mechanism.
 **TODO:** They need to be reviewed.
@@ -124,6 +127,8 @@ The following two state transitions are associated with the round-skipping mecha
 > the events are observed, the round skip event `next_round(r')` could be produced.
 > The `Round(r)` state machine, in this case, could process this event instead,
 > moving to the `Stalled` state in the same way as it is now.
+
+-->
 
 ### InProgress round
 
