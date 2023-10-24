@@ -27,7 +27,7 @@ module gmcast0 {
     //Nodes keep the following state
     type NodeState = {
         k: int,
-        pending: Set[Message],
+        pending: Set[(Message,int)],
         delivering: Set[Message],
         delivered: Set[Message],
         previous: Set[Message]
@@ -114,6 +114,41 @@ module gmcast0 {
     //                 ).chooseSome()
     //         )
 
-    //     }
-    // }
+    pure def GMReceiveHelper(
+                receiver: ProcId, 
+                sender: ProcId, 
+                m: Message, 
+                netState: Network, 
+                noState: NodeState
+            ): (Network, NodeState) = {
+
+        val newK =  
+            if (noState.previous.exists(om => om.conflicts(m))) 
+                noState.k + 1 
+            else 
+                noState.k
+
+        val newPrevious =
+            if (noState.previous.exists(om => om.conflicts(m)))
+                Set(m) 
+            else 
+                noState.previous.union(Set(m))
+        
+        val newPending = noState.pending.union(Set((m,newK)))
+
+        val newNodeState = {
+                                k: newK,
+                                pending: newPending,
+                                previous: newPrevious,
+                                ...noState
+                            }
+
+        val newMsg = {tag: "S1", timestamp: newK, ...m}
+        
+        val newMsgsSent = netState.get((receiver,sender)).exclude(Set(m)).union(Set(newMsg))
+        
+        val newNetworkState = netState.put((receiver, sender), newMsgsSent)
+
+        (newNetworkState, newNodeState)
+    }
 }
