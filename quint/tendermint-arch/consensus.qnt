@@ -58,6 +58,21 @@ type Result = {
     skipRound: Round_t
 }
 
+val consensusEvents = Set(
+    "NewRound",                // Start a new round, not as proposer.
+    "NewRoundProposer(Value)", // Start a new round and propose the Value.
+    "Proposal(Proposal)",      // Receive a proposal with possible polka round.
+    "ProposalInvalid",         // Receive an invalid proposal.
+    "PolkaAny",                // Receive +2/3 prevotes for anything.
+    "PolkaNil",                // Receive +2/3 prevotes for nil.
+    "PolkaValue(ValueId)",     // Receive +2/3 prevotes for Value.
+    "PrecommitAny",            // Receive +2/3 precommits for anything.
+    "PrecommitValue(ValueId)", // Receive +2/3 precommits for Value.
+    "RoundSkip",               // Receive +1/3 votes from a higher round.
+    "TimeoutPropose",          // Timeout waiting for proposal.
+    "TimeoutPrevote",          // Timeout waiting for prevotes.
+    "TimeoutPrecommit",        // Timeout waiting for precommits
+)
 
 val noProp : ProposeMsg_t = {src: "", round: -1, proposal: "", validRound: -1}
 val noVote : VoteMsg_t = {src: "", round: -1, step: "", id: ""}
@@ -75,7 +90,7 @@ val defaultResult : Result = {
 pure def Proposer (height: int, round: Round_t) : Proc_t = "Josef"
 
 // line 11.14
-pure def startRoundProposer (state: ConsensusState, ev: Event) : (ConsensusState, Result) = {
+pure def NewRoundProposer (state: ConsensusState, ev: Event) : (ConsensusState, Result) = {
     val newstate = state.with("round", ev.round).with("step", "propose")
     val proposal =  if (state.validValue != "nil") state.validValue
                     else ev.value
@@ -114,8 +129,8 @@ pure def line22 (state: ConsensusState, ev: Event) : (ConsensusState, Result) = 
 }
 
 pure def consensus (state: ConsensusState, ev: Event) : (ConsensusState, Result) = {
-    if (ev.name == "StartRoundAsProposer") 
-        startRoundProposer(state, ev)
+    if (ev.name == "NewRoundProposer") 
+        NewRoundProposer(state, ev)
     else if (ev.name == "Proposal")
         line22(state, ev)
     else
@@ -138,6 +153,8 @@ action init = all {
     system' = Map ("Josef" -> initialProcess("Josef")),
     _Result' = defaultResult
 }
+
+
 
 // just to write a test.
 action FireEvent(eventName: str, proc: Proc_t, h: int, r: Round_t, value: Value_t) : bool = all {
