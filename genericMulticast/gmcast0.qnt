@@ -40,6 +40,8 @@ module gmcast0 {
     var nodeState: ProcId -> NodeState
     var networkState: Network
 
+    pure def conflicts(lhs: Message, rhs: Message): bool = true
+
     action init: bool = all {
         nodeState' =  ProcIds.mapBy(
             p => {
@@ -86,4 +88,15 @@ module gmcast0 {
             nodeState' = nodeState
         }
     }
+
+    pure def GMReceiveHelper(m: Message, netState: NetworkState, noState: NodeState): (NetworkState,NodeState) {
+        
+    }
+
+    /*
+    action GMReceive(m: Message): bool = all {
+
+        networkState' = deliver(m),
+        nodeState' = nodeState
+    }*/
 }
