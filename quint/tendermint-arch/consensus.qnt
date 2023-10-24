@@ -37,6 +37,7 @@ type ConsensusState = {
     lockedRound: Round_t,
     lockedValue: Value_t,
     validRound: Round_t,
+    validValue: Value_t
     //continue
 }  
 
@@ -73,21 +74,27 @@ val defaultResult : Result = {
 // How are we actually doing this in the state machine approach
 pure def Proposer (height: int, round: Round_t) : Proc_t = "Josef"
 
-pure def line11 (state: ConsensusState, ev: Event) : (ConsensusState, Result) = {
+// line 11.14
+pure def startRoundProposer (state: ConsensusState, ev: Event) : (ConsensusState, Result) = {
     val newstate = state.with("round", ev.round).with("step", "propose")
-    if (Proposer(ev.height, ev.round) == state.p)
-        val result = defaultResult.with("proposal", {   src: state.p, 
+    val proposal =  if (state.validValue != "nil") state.validValue
+                    else ev.value
+    val result = defaultResult.with("proposal", {   src: state.p, 
                                                         round: ev.round, 
-                                                        proposal: ev.value,
+                                                        proposal: proposal,
                                                         validRound: state.validRound})
-        (newstate, result)
-    else
-        val result = defaultResult.with("timeout", "timeoutPropose") // do we need the roundnumber here?
+    (newstate, result)
+}
+
+// line 11.20
+pure def startRoundNonProposer (state: ConsensusState, ev: Event) : (ConsensusState, Result) = {
+    val newstate = state.with("round", ev.round).with("step", "propose")
+    val result = defaultResult.with("timeout", "timeoutPropose") // do we need the roundnumber here?
         (newstate, result)
 }
 
 pure def line22 (state: ConsensusState, ev: Event) : (ConsensusState, Result) = {
-    if (state.step != "propose") {
+    if (state.step == "propose") {
         val newstate = state.with("step", "prevote")
         if (state.lockedRound == -1 or state.lockedValue == ev.value)
             val result = defaultResult.with("voteMessage", { src: state.p,
@@ -107,8 +114,8 @@ pure def line22 (state: ConsensusState, ev: Event) : (ConsensusState, Result) = 
 }
 
 pure def consensus (state: ConsensusState, ev: Event) : (ConsensusState, Result) = {
-    if (ev.name == "StartRound") 
-        line11(state, ev)
+    if (ev.name == "StartRoundAsProposer") 
+        startRoundProposer(state, ev)
     else if (ev.name == "Proposal")
         line22(state, ev)
     else
@@ -124,7 +131,7 @@ var _Result : Result
 
 
 pure def initialProcess (name: Proc_t) : ConsensusState = {
-    { p: name, height : 1, round: 0, step: "", lockedRound: -1, lockedValue: "nil", validRound: -1}
+    { p: name, height : 1, round: 0, step: "", lockedRound: -1, lockedValue: "nil", validRound: -1, validValue: "nil"}
 }
 
 action init = all {
@@ -157,6 +164,11 @@ run FirstTest = {
         _Result' = _Result,
         })
     .then(FireEvent(("Proposal", "Josef", 1, 0, "testbal")))
+    .then(all{
+        assert(true), //TODO
+        system' = system,
+        _Result' = _Result,       
+    })
 }   
 
 }
