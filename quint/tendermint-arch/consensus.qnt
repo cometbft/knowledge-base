@@ -34,6 +34,8 @@ type ConsensusState = {
     height : int,
     round: Round_t,
     step: Step_t,
+    lockedRound: Round_t,
+    lockedValue: Value_t,
     validRound: Round_t,
     //continue
 }  
@@ -85,8 +87,23 @@ pure def line11 (state: ConsensusState, ev: Event) : (ConsensusState, Result) = 
 }
 
 pure def line22 (state: ConsensusState, ev: Event) : (ConsensusState, Result) = {
-    // TODO
-    (state, defaultResult)
+    if (state.step != "propose") {
+        val newstate = state.with("step", "prevote")
+        if (state.lockedRound == -1 or state.lockedValue == ev.value)
+            val result = defaultResult.with("voteMessage", { src: state.p,
+                                                            round: state.round,
+                                                            step: "prevote",  // "prevote" or "precommit"
+                                                            id: ev.value})
+            (newstate, result)
+        else
+            val result = defaultResult.with("voteMessage", { src: state.p,
+                                                            round: state.round,
+                                                            step: "prevote",  // "prevote" or "precommit"
+                                                            id: "nil"})
+            (newstate, result)
+    }
+    else
+        (state, defaultResult)
 }
 
 pure def consensus (state: ConsensusState, ev: Event) : (ConsensusState, Result) = {
@@ -107,7 +124,7 @@ var _Result : Result
 
 
 pure def initialProcess (name: Proc_t) : ConsensusState = {
-    { p: name, height : 1, round: 0, step: "", validRound: -1}
+    { p: name, height : 1, round: 0, step: "", lockedRound: -1, lockedValue: "nil", validRound: -1}
 }
 
 action init = all {
@@ -116,8 +133,8 @@ action init = all {
 }
 
 // just to write a test.
-action StartRound(proc: Proc_t, h: int, r: Round_t, value: Value_t) : bool = all {
-    val res = consensus(system.get(proc),  {name : "StartRound",
+action FireEvent(eventName: str, proc: Proc_t, h: int, r: Round_t, value: Value_t) : bool = all {
+    val res = consensus(system.get(proc),  {name : eventName,
                                             height : h,
                                             round: r,
                                             value: value,
@@ -128,15 +145,18 @@ action StartRound(proc: Proc_t, h: int, r: Round_t, value: Value_t) : bool = all
     }
 }
 
+
+
 run FirstTest = {
     init
-    .then(StartRound("Josef", 1, 0, "testbal"))
+    .then(FireEvent("StartRound", "Josef", 1, 0, "testbal"))
     .then(all{
         assert(_Result.timeout == noTimeout),
         assert(_Result.proposal.src == "Josef"),
         system' = system,
         _Result' = _Result,
-   }   )
+        })
+    .then(FireEvent(("Proposal", "Josef", 1, 0, "testbal")))
 }   
 
 }
