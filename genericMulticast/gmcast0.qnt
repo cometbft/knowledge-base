@@ -1,4 +1,6 @@
 module gmcast0 {
+    import spell.* from "./spell"
+
     type ProcId = int
 
     //XXX Quint: Ideally these should be consts, but because it would have to be instantiated on every import, there would be duplication.
@@ -9,11 +11,12 @@ module gmcast0 {
     type Message = {
         tag: str, //Shoud be in MsgType
         timestamp: int, // -1 means no timestamp
-        channel: (ProcId, ProcId), // (sender, receiver)
         // groups of processes this message goes to
         dst: Set[Set[ProcId]],
-        payload: str
+        id: int
     }
+
+    type Channel = (ProcId, ProcId)
 
     pure val Groups = Set(
         Set(1,2),
@@ -30,11 +33,8 @@ module gmcast0 {
         previous: Set[Message]
     }
 
-    type Network = {
-        // ProcId is the receiver of the message
-        msgsSent: Set[Message],         //Unicast sent messages.
-        msgsRcvd: Set[Message],         //Unicast received messages
-    }
+    type Network = 
+       Channel -> Set[Message]
 
     
     var nodeState: ProcId -> NodeState
@@ -51,7 +51,11 @@ module gmcast0 {
                 delivered: Set(),
                 previous: Set()
             }),
-        networkState' = {msgsSent: Set(), msgsRcvd: Set()}
+        // create channels between all processes
+        networkState' = 
+            ProcIds.crossproduct(ProcIds).mapBy(
+                (p1, p2) => Set()
+            )
     }
 
     action unchanged_all: bool = all {
@@ -59,44 +63,57 @@ module gmcast0 {
         nodeState' = nodeState
     }
 
-    action GMSend(sender: ProcId, payload: str, groups: Set[Set[ProcId]]): bool = {
+    action GMSend(sender: ProcId, id: int, groups: Set[Set[ProcId]]): bool = {
         all {
             // the groups are a valid destination for the multicast
             groups.forall(group => Groups.contains(group)),
             // construct the message
             val message = {
                     tag: "S0",
-                    timestamp: -1,
-                    channel: (-1, -1), // will be filled below
+                    timestamp: -1, // not used for S0 messages
                     dst: groups,
-                    payload: payload
+                    id: id
                 }
             val receivers = groups.flatten()
             val newMsgsSent = 
-                receivers.fold(
-                    Set(),
-                    (acc, receiver) =>
-                        acc.union(Set(
-                            {
-                                channel: (sender, receiver),
-                                ...message
-                            }
-                        )
-                    )
+                ProcIds.crossproduct(ProcIds).mapBy(
+                    (p1, p2) => Set()
                 )
-            networkState' = {msgsSent: newMsgsSent, ...networkState},
+            networkState' = 
+                networkState.keys().mapBy(
+                    channel => 
+                        if (channel._1 == sender and receivers.contains(channel._2)) {
+                            networkState.get(channel).union(Set(message))
+                        } else {
+                            networkState.get(channel)
+                        }
+                ),
             nodeState' = nodeState
         }
     }
-
-    pure def GMReceiveHelper(m: Message, netState: NetworkState, noState: NodeState): (NetworkState,NodeState) {
         
-    }
+    // action ComputeSeqNumber(p: ProcId, m: Message): bool = {
+    //     all {
+    //         // for each destination process, we have received an S1
+    //         m.dst.flatten().forall(
+    //         receiver => 
+    //             networkState.msgsRcvd.exists(
+    //                 msg => msg.channel == (p, receiver) and
+    //                     equal(msg, m) and
+    //                     msg.tag == "S1"
+    //             )
+    //         ),
+    //         // find the maximal timestamp among the S1 messages
+    //         m.dst.flatten().fold(
+    //             -1,
+    //             (acc, receiver) =>
+    //                 val msgFromReceiver = networkState.msgsRcvd.filter(
+    //                     msg => msg.channel == (p, receiver) and
+    //                         equal(msg, m) and
+    //                         msg.tag == "S1"
+    //                 ).chooseSome()
+    //         )
 
-    /*
-    action GMReceive(m: Message): bool = all {
-
-        networkState' = deliver(m),
-        nodeState' = nodeState
-    }*/
+    //     }
+    // }
 }

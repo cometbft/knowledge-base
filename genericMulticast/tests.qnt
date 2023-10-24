@@ -3,12 +3,13 @@ module tests {
 
     run GMSendTest: bool = {
         init.then(
-            GMSend(1, "nada", Groups)
+            GMSend(1, 0, Groups)
         ).then(
             all {
-                Groups.flatten().forall(p => networkState
-                                                .msgsSent
-                                                .exists(m => m.channel == (1,p))),
+                Groups.flatten().forall(p => 
+                    networkState.get((1, p)).exists(
+                        msg => msg.id == 0
+                    )),
                 unchanged_all
             }
         )
