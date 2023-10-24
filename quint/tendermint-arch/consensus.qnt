@@ -80,15 +80,11 @@ val consensusEvents = Set(
     "TimeoutPrecommit"       // Timeout waiting for precommits
 )
 
-/*     "PolkaAny",                // Receive +2/3 prevotes for anything.
-    "PolkaNil",                // Receive +2/3 prevotes for nil.
+/*    
+
     "PolkaValue(ValueId)",     // Receive +2/3 prevotes for Value.
-    "PrecommitAny",            // Receive +2/3 precommits for anything.
     "PrecommitValue(ValueId)", // Receive +2/3 precommits for Value.
-    "RoundSkip",               // Receive +1/3 votes from a higher round.
-    "TimeoutPropose",          // Timeout waiting for proposal.
-    "TimeoutPrevote",          // Timeout waiting for prevotes.
-    "TimeoutPrecommit"       // Timeout waiting for precommits
+
 ) */
 
 val noProp : ProposeMsg_t = {src: "", height: -1, round: -1, proposal: "", validRound: -1}
@@ -136,7 +132,8 @@ pure def NewRound (state: ConsensusState, ev: Event) : (ConsensusState, Result) 
         (newstate, result)
 }
 
-pure def line22 (state: ConsensusState, ev: Event) : (ConsensusState, Result) = {
+// line 22
+pure def Proposal (state: ConsensusState, ev: Event) : (ConsensusState, Result) = {
     if (state.step == "propose") {
         val newstate = state.with("step", "prevote")
         if (state.lockedRound == -1 or state.lockedValue == ev.value)
@@ -158,7 +155,8 @@ pure def line22 (state: ConsensusState, ev: Event) : (ConsensusState, Result) = 
         (state, defaultResult)
 }
 
-pure def line28 (state: ConsensusState, ev: Event) : (ConsensusState, Result) = {
+// line 28
+pure def ProposalAndPolkaPreviousAndValid (state: ConsensusState, ev: Event) : (ConsensusState, Result) = {
     if (state.step == "propose" and ev.vr >= 0 and ev.vr < state.round) {
         val newstate = state.with("step", "prevote")
         if (state.lockedRound <= ev.vr or state.lockedValue == ev.value)
@@ -205,7 +203,8 @@ pure def PolkaAny (state: ConsensusState, ev: Event) : (ConsensusState, Result) 
         (state, defaultResult) 
 }
 
-pure def line36 (state: ConsensusState, ev: Event) : (ConsensusState, Result) = {
+// line 36
+pure def ProposalAndPolkaAndValid (state: ConsensusState, ev: Event) : (ConsensusState, Result) = {
     val auxState = { ...state, validValue: ev.value, validRound: state.round }
     if (state.step == "prevote") {
         val newstate = { ...auxState,   lockedValue: ev.value,
@@ -310,15 +309,15 @@ pure def consensus (state: ConsensusState, ev: Event) : (ConsensusState, Result)
     else if (ev.name == "NewRound")
         NewRound(state, ev)
     else if (ev.name == "Proposal")
-        line22(state, ev)
+        Proposal(state, ev)
     else if (ev.name == "ProposalAndPolkaPreviousAndValid")
-        line28(state, ev)
+        ProposalAndPolkaPreviousAndValid(state, ev)
     else if (ev.name == "ProposalInvalid")
         ProposalInvalid(state, ev)
     else if (ev.name == "PolkaAny")
         PolkaAny(state, ev)
     else if (ev.name == "ProposalAndPolkaAndValid")
-        line36(state, ev)
+        ProposalAndPolkaAndValid(state, ev)
     else if (ev.name == "PolkaNil")
         PolkaNil(state, ev)
     else if (ev.name == "PrecommitAny")
