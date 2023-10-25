@@ -40,7 +40,7 @@ module gmcast0 {
     var nodeState: ProcId -> NodeState
     var networkState: Network
 
-    pure def conflicts(lhs: Message, rhs: Message): bool = true
+    pure def conflicts(lhs: int, rhs: int): bool = true
 
     action init: bool = all {
         nodeState' =  ProcIds.mapBy(
@@ -153,13 +153,13 @@ module gmcast0 {
             ): (Network, NodeState) = {
 
         val newK =  
-            if (noState.previous.exists(om => om.conflicts(m))) 
+            if (noState.previous.exists(om => om.id.conflicts(m.id))) 
                 noState.k + 1 
             else 
                 noState.k
 
         val newPrevious =
-            if (noState.previous.exists(om => om.conflicts(m)))
+            if (noState.previous.exists(om => om.id.conflicts(m.id)))
                 Set(m) 
             else 
                 noState.previous.union(Set(m))
@@ -197,6 +197,37 @@ module gmcast0 {
                 networkState' = newNetworkState,
                 nodeState' = nodeState.put(receiver, newReceiverState)
             }
+        }
+    }
+
+    action AssignSeqNumber(receiver: ProcId, id: int, sender: ProcId): bool = {
+        all {
+            // get the first message from sender to receiver with the id and
+            // tag S2
+            val msg = networkState.get((sender, receiver)).fold(
+                // start with empty dummy message
+                {tag: "S2", timestamp: -1, dst: Set(), id: -1},
+                (acc, m) => 
+                    if (m.id == id and m.tag == "S2") {
+                        m
+                    } else {
+                        acc
+                    }
+            )
+            // get the node state of the receiver
+            val receiverState = nodeState.get(receiver)
+            // get the timestamp of the message
+            val tsf = msg.timestamp
+            // create the new node state
+            val newReceiverState = 
+                {
+                    k: receiverState.k,
+                    pending: receiverState.pending.exclude(Set((msg, tsf))),
+                    delivering: receiverState.delivering.union(Set(msg)),
+                    delivered: receiverState.delivered,
+                    previous: receiverState.previous
+                }
+            true
         }
     }
 }
