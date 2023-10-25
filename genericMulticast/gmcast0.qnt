@@ -231,5 +231,14 @@ module gmcast0 {
             //     }
             true
         }
+
+
+    pure def DoDeliverHelper(): bool = {
+        true
+    }
+
+    action DoDeliver(): bool = {
+        val newState = DoDeliverHelper
+        unchanged_all
     }
 }
