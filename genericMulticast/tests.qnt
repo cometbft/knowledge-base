@@ -35,4 +35,31 @@ module tests {
             }
         )
     }
+
+    run GMReceiveTest: bool = {
+        init.then(
+            GMSend(1, 0, Groups)
+        ).then(
+            nondet s0channel = networkState.keys()
+                            .filter( k => 
+                                    val src = k._1
+                                    val dst = k._2
+                                    networkState.get(k).exists(m => m.tag == "S0")).oneOf()
+            val sender = s0channel._1
+            val receiver = s0channel._2
+            val receiverState = nodeState.get(receiver)
+            nondet s0msg = networkState.get(s0channel).filter(m => m.tag == "S0").oneOf()
+            AssignTimestamp(sender, receiver, s0msg).then(
+                all {
+                    networkState.get((receiver, sender)).exists(
+                        msg => all {
+                            msg.id == 0,
+                            msg.tag == "S1"
+                        }
+                    ),
+                    unchanged_all
+                }
+            )
+        )
+    }
 }
