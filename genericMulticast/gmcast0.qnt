@@ -218,15 +218,17 @@ module gmcast0 {
             val receiverState = nodeState.get(receiver)
             // get the timestamp of the message
             val tsf = msg.timestamp
-            // create the new node state
-            val newReceiverState = 
-                {
-                    k: receiverState.k,
-                    pending: receiverState.pending.exclude(Set((msg, tsf))),
-                    delivering: receiverState.delivering.union(Set(msg)),
-                    delivered: receiverState.delivered,
-                    previous: receiverState.previous
-                }
+            
+            // val newK = 
+            // // create the new node state
+            // val newReceiverState = 
+            //     {
+            //         k: if tsf > receiverState.k {k+1},
+            //         pending: receiverState.pending.exclude(Set((msg, tsf))),
+            //         delivering: receiverState.delivering.union(Set(msg)),
+            //         delivered: receiverState.delivered,
+            //         previous: receiverState.previous
+            //     }
             true
         }
     }
