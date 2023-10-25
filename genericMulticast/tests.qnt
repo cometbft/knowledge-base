@@ -18,7 +18,15 @@ module tests {
     run ComputeSeqNumberTest: bool = {
         GMSendTest.then(
             // everyone assigns a timestamp
-            ProcIds.size().reps(i => AssignTimestamp)
+            val procIdList = ProcIds.fold(
+                List(),
+                (acc, p) => acc.append(p)
+            )
+            procIdList.length().reps(
+                i => AssignTimestamp(
+                    procIdList[i], 1, networkState.get((1, procIdList[i])).oneOf()
+                )
+            )
         ).then(
             // everyone computes a sequence number
             ComputeSeqNumber(
