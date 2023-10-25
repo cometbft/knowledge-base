@@ -92,27 +92,57 @@ module gmcast0 {
         }
     }
         
-    // action ComputeSeqNumber(p: ProcId, m: Message): bool = {
-    //     all {
-    //         // for each destination process, we have received an S1
-    //         m.dst.flatten().forall(
-    //         receiver => 
-    //             networkState.msgsRcvd.exists(
-    //                 msg => msg.channel == (p, receiver) and
-    //                     equal(msg, m) and
-    //                     msg.tag == "S1"
-    //             )
-    //         ),
-    //         // find the maximal timestamp among the S1 messages
-    //         m.dst.flatten().fold(
-    //             -1,
-    //             (acc, receiver) =>
-    //                 val msgFromReceiver = networkState.msgsRcvd.filter(
-    //                     msg => msg.channel == (p, receiver) and
-    //                         equal(msg, m) and
-    //                         msg.tag == "S1"
-    //                 ).chooseSome()
-    //         )
+    action ComputeSeqNumber(p: ProcId, id: int, dst: Set[Set[ProcId]]): bool = {
+        all {
+            // for all processes in dst, we have received an S1
+            dst.flatten().forall(
+                receiver => 
+                    // there must be a message tagged with S1 sent by receiver to p relating to m
+                    networkState.get((p, receiver)).exists(
+                        msg => msg.id == id and
+                            msg.tag == "S1"
+                    )
+                    
+            ),
+            // get messages tagged with S1 received by p relating to the message id
+            val receivedMessages = dst.flatten().fold(
+                Set(), (acc, receiver) =>
+                    val msgsFromReceiver = networkState.get((receiver, p)).filter(
+                        msg => msg.id == id and
+                            msg.tag == "S1")
+                    acc.union(msgsFromReceiver)
+            )
+
+            // find the maximal timestamp among the S1 messages
+            val timestamp_final = receivedMessages.fold(
+                -1,
+                (acc, msg) => 
+                    if (msg.timestamp > acc) {
+                        msg.timestamp
+                    } else {
+                        acc
+                    }
+            )
+            // tag the message with S2 and the timestamp
+            val message_final = {
+                tag: "S2",
+                timestamp: timestamp_final,
+                dst: dst,
+                id: id
+            }
+            // send it to all destination processes
+            networkState' = 
+                networkState.keys().mapBy(
+                    channel => 
+                        if (dst.flatten().contains(channel._2)) {
+                            networkState.get(channel).union(Set(message_final))
+                        } else {
+                            networkState.get(channel)
+                        }
+                ),
+            nodeState' = nodeState
+        }
+    }
 
     pure def AssignTimestampHelper(
                 sender: ProcId, 
