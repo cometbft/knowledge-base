@@ -175,26 +175,21 @@ module gmcast0 {
 
         val newMsg = {tag: "S1", timestamp: newK, ...m}
         
-        val newMsgsSent = netState.get((receiver,sender)).exclude(Set(m)).union(Set(newMsg)) //This is incomplete.
-        
-        val newNetworkState = netState.put((receiver, sender), newMsgsSent)
+        val newIncomingChannel = netState.get((sender,receiver)).exclude(Set(m))
+        val newOutgoingChannel =    if (sender == receiver) 
+                                        newIncomingChannel.union(Set(newMsg))
+                                    else
+                                        netState.get((receiver,sender)).union(Set(newMsg))
+        val newNetworkState = 
+            netState.put((sender,receiver), newIncomingChannel)
+                    .put((receiver, sender), newOutgoingChannel)
 
         (newNetworkState, newNodeState)
     }
 
-    action AssignTimestamp(): bool = all {
-        val s0channels = networkState.keys()
-                            .filter( k => 
-                                    val src = k._1
-                                    val dst = k._2
-                                    networkState.get(k).exists(m => m.tag == "S0"))
+    action AssignTimestamp(sender: ProcId, receiver: ProcId, s0msg: Message): bool = all {
         all {
-            s0channels.size() > 0,
-            nondet s0channel = s0channels.oneOf()
-            val sender = s0channel._1
-            val receiver = s0channel._2
-            val receiverState = nodeState.get(s0channel._2)
-            nondet s0msg = networkState.get(s0channel).filter(m => m.tag == "S0").oneOf()
+            val receiverState = nodeState.get(receiver)
             val newState = AssignTimestampHelper(sender, receiver, s0msg, networkState, receiverState)
             val newNetworkState = newState._1
             val newReceiverState = newState._2
