@@ -2,12 +2,17 @@ module gmcast0 {
     import spell.* from "./spell"
 
     type ProcId = int
+    pure val ProcIds = Set(1,2,3,4,5)
+    pure val Groups = Set(
+        Set(1,2),
+        Set(3,4),
+        Set(5)
+    )
 
     //XXX Quint: Ideally these should be consts, but because it would have to be instantiated on every import, there would be duplication.
     //All processes in the system
 
     pure val MsgType = Set("S0", "S1", "S2")
-    pure val ProcIds = Set(1,2,3,4,5)
     type Message = {
         tag: str, //Shoud be in MsgType
         timestamp: int, // -1 means no timestamp
@@ -18,18 +23,12 @@ module gmcast0 {
 
     type Channel = (ProcId, ProcId)
 
-    pure val Groups = Set(
-        Set(1,2),
-        Set(3,4),
-        Set(5)
-    )
-
     //Nodes keep the following state
     type NodeState = {
         k: int,
         pending: Set[(Message,int)],
-        delivering: Set[Message],
-        delivered: Set[Message],
+        delivering: Set[(Message,int)],
+        delivered: Set[(Message,int)],
         previous: Set[Message]
     }
 
@@ -84,58 +83,6 @@ module gmcast0 {
                     channel => 
                         if (channel._1 == sender and receivers.contains(channel._2)) {
                             networkState.get(channel).union(Set(message))
-                        } else {
-                            networkState.get(channel)
-                        }
-                ),
-            nodeState' = nodeState
-        }
-    }
-        
-    action ComputeSeqNumber(p: ProcId, id: int, dst: Set[Set[ProcId]]): bool = {
-        all {
-            // for all processes in dst, we have received an S1
-            dst.flatten().forall(
-                receiver => 
-                    // there must be a message tagged with S1 sent by receiver to p relating to m
-                    networkState.get((p, receiver)).exists(
-                        msg => msg.id == id and
-                            msg.tag == "S1"
-                    )
-                    
-            ),
-            // get messages tagged with S1 received by p relating to the message id
-            val receivedMessages = dst.flatten().fold(
-                Set(), (acc, receiver) =>
-                    val msgsFromReceiver = networkState.get((receiver, p)).filter(
-                        msg => msg.id == id and
-                            msg.tag == "S1")
-                    acc.union(msgsFromReceiver)
-            )
-
-            // find the maximal timestamp among the S1 messages
-            val timestamp_final = receivedMessages.fold(
-                -1,
-                (acc, msg) => 
-                    if (msg.timestamp > acc) {
-                        msg.timestamp
-                    } else {
-                        acc
-                    }
-            )
-            // tag the message with S2 and the timestamp
-            val message_final = {
-                tag: "S2",
-                timestamp: timestamp_final,
-                dst: dst,
-                id: id
-            }
-            // send it to all destination processes
-            networkState' = 
-                networkState.keys().mapBy(
-                    channel => 
-                        if (dst.flatten().contains(channel._2)) {
-                            networkState.get(channel).union(Set(message_final))
                         } else {
                             networkState.get(channel)
                         }
@@ -200,6 +147,58 @@ module gmcast0 {
         }
     }
 
+    action ComputeSeqNumber(p: ProcId, id: int, dst: Set[Set[ProcId]]): bool = {
+        all {
+            // for all processes in dst, we have received an S1
+            dst.flatten().forall(
+                receiver => 
+                    // there must be a message tagged with S1 sent by receiver to p relating to m
+                    networkState.get((p, receiver)).exists(
+                        msg => msg.id == id and
+                            msg.tag == "S1"
+                    )
+                    
+            ),
+            // get messages tagged with S1 received by p relating to the message id
+            val receivedMessages = dst.flatten().fold(
+                Set(), (acc, receiver) =>
+                    val msgsFromReceiver = networkState.get((receiver, p)).filter(
+                        msg => msg.id == id and
+                            msg.tag == "S1")
+                    acc.union(msgsFromReceiver)
+            )
+
+            // find the maximal timestamp among the S1 messages
+            val timestamp_final = receivedMessages.fold(
+                -1,
+                (acc, msg) => 
+                    if (msg.timestamp > acc) {
+                        msg.timestamp
+                    } else {
+                        acc
+                    }
+            )
+            // tag the message with S2 and the timestamp
+            val message_final = {
+                tag: "S2",
+                timestamp: timestamp_final,
+                dst: dst,
+                id: id
+            }
+            // send it to all destination processes
+            networkState' = 
+                networkState.keys().mapBy(
+                    channel => 
+                        if (dst.flatten().contains(channel._2)) {
+                            networkState.get(channel).union(Set(message_final))
+                        } else {
+                            networkState.get(channel)
+                        }
+                ),
+            nodeState' = nodeState
+        }
+    }
+    
     action AssignSeqNumber(receiver: ProcId, id: int, sender: ProcId): bool = {
         all {
             // get the first message from sender to receiver with the id and
@@ -231,14 +230,47 @@ module gmcast0 {
             //     }
             true
         }
-
-
-    pure def DoDeliverHelper(): bool = {
-        true
     }
 
-    action DoDeliver(): bool = {
-        val newState = DoDeliverHelper
-        unchanged_all
+    pure def DoDeliverHelper(
+                p: ProcId,
+                ti: (Message, int),
+                noState: NodeState
+        ): NodeState = {
+            val mi = ti._1
+            val tsi = ti._2
+            val G = noState.delivering.filter(tj => 
+                val mj = tj._1
+                val tsj = tj._2
+                noState.delivering
+                        .union(noState.pending)
+                        .exclude(Set(tj))
+                        .forall(tk => 
+                                    val mk = tk._1
+                                    val tsk = tk._2  
+                                    not(mj.id.conflicts(mk.id))
+                        )
+            )
+            val D = Set(ti).union(G)
+            val newNoState = {
+                delivering: noState.delivering.exclude(D),
+                delivered: noState.delivered.union(D),
+                ...noState
+            }
+            
+            /* The following lines is in the algorithm but has not been specified.
+            val msgsToDeliver = D.map(e => e._1)
+            msgsToDeliver.forall(m, GMDeliver(m))
+            */
+            newNoState
+    }
+
+    action DoDeliver(p: ProcId): bool = {
+        val mi = ({tag: "S1", timestamp: -1, dst: Groups, id:1}, 3)
+        val newNodeState = DoDeliverHelper(p, mi, nodeState.get(p))
+        all {
+            nodeState' = nodeState.set(p, newNodeState),
+            networkState' = networkState
+        }
     }
 }
