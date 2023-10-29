@@ -199,38 +199,31 @@ module gmcast0 {
         }
     }
     
-    action AssignSeqNumber(receiver: ProcId, id: int, sender: ProcId): bool = {
-        all {
-            // get the first message from sender to receiver with the id and
-            // tag S2
-            val msg = networkState.get((sender, receiver)).fold(
-                // start with empty dummy message
-                {tag: "S2", timestamp: -1, dst: Set(), id: -1},
-                (acc, m) => 
-                    if (m.id == id and m.tag == "S2") {
-                        m
-                    } else {
-                        acc
-                    }
-            )
-            // get the node state of the receiver
-            val receiverState = nodeState.get(receiver)
-            // get the timestamp of the message
-            val tsf = msg.timestamp
-            
-            // val newK = 
-            // // create the new node state
-            // val newReceiverState = 
-            //     {
-            //         k: if tsf > receiverState.k {k+1},
-            //         pending: receiverState.pending.exclude(Set((msg, tsf))),
-            //         delivering: receiverState.delivering.union(Set(msg)),
-            //         delivered: receiverState.delivered,
-            //         previous: receiverState.previous
-            //     }
-            true
+
+    def AssignSeqNumberState(msg: Message, state: NodeState): NodeState =
+        val newState = { ...state, 
+            pending: state.pending.exclude(Set((msg, msg.timestamp))),
+            delivering: state.delivering.union(Set((msg, msg.timestamp)))
         }
+        if (msg.timestamp > state.k) {
+            if (state.previous.exists(m => m == msg)) 
+                { ...newState, k: msg.timestamp + 1, previous: Set() }
+            else
+                { ...newState, k: msg.timestamp }
+        } else newState
+
+    action AssignSeqNumberFor(sender: ProcId, receiver: ProcId, msg: Message): bool = all {
+        nodeState' = nodeState.mapPut(receiver, state => AssignSeqNumberState(msg, state)),
+        networkState' = networkState.mapPut((sender, receiver), msgs => msgs.exclude(Set(msg)))
     }
+
+    action AssignSeqNumber(sender: ProcId, receiver: ProcId): bool =
+        val msgs = networkState.get((sender, receiver)).filter(m => m.tag == "S2")
+        all {
+            require(msgs.nonEmpty()),
+            nondet msg = oneOf(msgs)
+            AssignSeqNumberFor(sender, receiver, msg)
+        }
 
     pure def DoDeliverHelper(
                 p: ProcId,

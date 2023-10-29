@@ -70,4 +70,14 @@ module tests {
             )
         )
     }
+
+    // auxiliary action for assertions
+    action _assert(pred: bool): bool = all { assert(pred), unchanged_all }
+
+    run AssignSeqNumberTest =
+        ComputeSeqNumberTest
+            .then(_assert(nodeState.get(2).k == 0))
+            .then(AssignSeqNumberFor(1, 2, { tag: "S2", timestamp: 5, dst: Set(Set()), id: 1 }))
+            .then(_assert(nodeState.get(2).k == 5))
+
 }
