@@ -2,6 +2,50 @@
 
 // 👉 This is WORK IN PROGRESS; not everything here is correct 👈 
 
+/*
+Dynamic Spanning Forest gossip protocol. Or Dinamic Optimal Graph (DOG) gossip protocol.
+
+Briefly, if node A receives from B a transaction that it already has, this means that there must
+exist a cycle in the network topology, so A tells B to stop sending transactions. So the idea is
+simply to cut cycles (while respecting the graph!). 
+
+The protocol adds two new messages to the current "flood" mempool: 
+- HaveTx(TxKey) for cutting cycles, and 
+- Reset for dynamic re-routing when a node disconnects (more on this later).
+
+The rules:
+- H1. If node A receives a transaction tx from node B that it already received (that is, it's in the
+  cache), then A replies to B with a message HaveTx(tx).
+    - HaveTx messages contains a transaction hash, so its size is insignificant. 
+- H2. If node B receives a HaveTx(tx) message from node A, it disables the route sender(tx) → A. 
+    - A route in a node is a tuple `sourceNodeID → targetNodeID`, with source and target being any
+      of the node's peers. Initially, all nodes have all their routes enabled.
+    - We don't want to cut all routes from B to A, only those that come from the transaction's
+      original sender, that's why we need to take the source into account.
+    - The protocol implicitly favours routes with low latency, by cutting routes to peers that send
+      the duplicate tx at a later time.
+- H3. Before node A sends a transaction tx to B, check if the route sender(tx) → B is enabled. 
+    - Txs received from users are always gossiped to all peers.
+- H4. After node A sends a HaveTx message to B, start a timer on A and don't let A send any other
+  HaveTx message while the timer is on. 
+    - This is to avoid a specific interleaving of messages that could render node A isolated from
+      gossip traffic.
+    - While the timer is on, we allow incoming traffic that flows from B to gradually stop. During
+      this time, the traffic is diverted to other routes from other peers, while A still receives a
+      small number of duplicate transactions (it's visible in the picture above).
+    - The suggested minimum timeout should be the time it takes already-dispatched messages from B
+      to arrive to A, so it's enough for the traffic from B to fully stop. We don't care to receive
+      a few more duplicate transactions, therefore the timer could be safely extended to be sure
+      that A does not become isolated.
+- R1. If node A detects that its peer B is disconnected, remove any route that has B as source or
+  target, and broadcast to all other peers a message Reset.
+    - This is to signal A's peers that A's situation has changed and its routing data should be
+      reset so it can be rerouted if needed.
+- R2. On receiving a Reset message from A, remove any route that has A as source or target. 
+    - This will allow traffic to flow again to A and nodes will dynamically adapt to the new
+      traffic, closing routes when needed.
+*/
+
 module spanningForest {
     import spells.* from "./spells"
     
@@ -90,12 +134,13 @@ module spanningForest {
     }
 
     // A node receives a transaction from a user via an RPC endpoint.
+    // It immediately sends the transaction to all its peers.
     // Users are allowed to submit the same tx more than once and to multiple nodes.
     // This action is only enabled if the transaction is not in the pool. In the current mempool
     // implementation we have the cache that prevents this scenario.
     action receiveTxFromUser(node, tx) = all {
         require(not(pool.get(node).includes(tx))),
-        msgs' = msgs,
+        msgs' = msgs.mapPutMany(peers.get(node), p => msgs.get(p).setAdd((node, T(tx)))),
         peers' = peers,
         disabledRoutes' = disabledRoutes,
         pool' = pool.mapPut(node, txs => txs.append(tx)),
@@ -164,14 +209,18 @@ module spanningForest {
         step' = ReceiveTxMessageStep((node, sender, tx)),
     }
 
+    // Disable the route (sender(tx) -> sender).
+    pure def disable(routes, node, tx, txSenders, sender) =
+        if (txSenders.listIsEmpty()) routes else
+            routes.mapPut(node, rs => rs.setAdd((txSenders[0], sender)))
+
     // Handle a received HaveTx message.
     // Disable the route (sender(tx) -> sender).
     action handleHaveTxMessage(node, sender, tx, msgs1) = all {
         msgs' = msgs1,
         senders' = senders,
         val txSenders = senders.get(node).mapGetSafe(tx).optionListToList() // in most cases, there exists one and only one sender for tx
-        disabledRoutes' = if (txSenders.listIsEmpty()) disabledRoutes else
-            disabledRoutes.mapPut(node, routes => routes.setAdd((txSenders[0], sender))),
+        disabledRoutes' = disabledRoutes.disable(node, tx, txSenders, sender),
         peers' = peers,
         pool' = pool,
         poolIndex' = poolIndex,
@@ -179,12 +228,19 @@ module spanningForest {
         step' = ReceiveHaveTxMessageStep((node, sender, tx)),
     }
 
+    pure def isSourceOrTarget(node, route) =
+        node == route._1 or node == route._2
+
+    // Remove any route that has sender as source or target. 
+    pure def remove(routes, node, sender) = 
+        routes.mapPut(node, rs => rs.filter(route => not(sender.isSourceOrTarget(route))))
+
     // Handle a received Reset message.
     // Remove any route that has the message sender as source or target. 
     action handleResetMessage(node, sender, msgs1) = all {
         msgs' = msgs1,
         senders' = senders,
-        disabledRoutes' = disabledRoutes.mapPut(node, routes => routes.filter(r => r._1 != sender and r._2 != sender)),
+        disabledRoutes' = disabledRoutes.remove(node, sender),
         peers' = peers,
         pool' = pool,
         poolIndex' = poolIndex,
